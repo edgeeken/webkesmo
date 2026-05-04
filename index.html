@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Web.Kesmo - 3D Motion Director (BETA 1.0.5)</title>
+    <title>Web.Kesmo - 3D Motion Director (BETA 1.1.3)</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -536,6 +536,11 @@
             border-radius: 0 3px 3px 0;
         }
 
+        .timeline-item.has-effect {
+            border: 2px solid var(--effect-color) !important;
+            box-shadow: 0 0 10px rgba(170, 0, 255, 0.4);
+        }
+
         /* HANDLES */
         .handle-fade {
             position: absolute;
@@ -982,7 +987,7 @@
     <div id="app">
         <!-- Top Header -->
         <div id="top-header">
-            <div class="header-logo" id="btn-install-hint">WEB.KESMO <span style="font-size: 8px; opacity: 0.5; vertical-align: top; margin-left: 4px;">BETA 1.0.5</span></div>
+            <div class="header-logo" id="btn-install-hint">WEB.KESMO <span style="font-size: 8px; opacity: 0.5; vertical-align: top; margin-left: 4px;">BETA 1.1.4</span></div>
             <div class="header-btns">
                 <button class="btn-header" id="btn-pwa-install" style="display:none; background: var(--accent); border-color: var(--accent); color: #fff;">
                     INSTALL
@@ -1405,14 +1410,17 @@
             gridHelper.position.y = 0;
             scene.add(gridHelper);
 
+            const viewportAxes = new THREE.Group();
+            scene.add(viewportAxes);
+
             // Infinite Floor Axes
             const xMat = new THREE.LineBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.5 });
             const xGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-1000, 0.01, 0), new THREE.Vector3(1000, 0.01, 0)]);
-            scene.add(new THREE.Line(xGeo, xMat));
+            viewportAxes.add(new THREE.Line(xGeo, xMat));
 
             const zMat = new THREE.LineBasicMaterial({ color: 0x33ff33, transparent: true, opacity: 0.5 });
             const zGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.01, -1000), new THREE.Vector3(0, 0.01, 1000)]);
-            scene.add(new THREE.Line(zGeo, zMat));
+            viewportAxes.add(new THREE.Line(zGeo, zMat));
 
             // Fog to disappear in distance
             scene.fog = new THREE.Fog(0x0a0a0a, 5, 25);
@@ -1574,6 +1582,7 @@
             document.querySelector('.eye-btn').addEventListener('click', () => {
                 overlaysVisible = !overlaysVisible;
                 gridHelper.visible = overlaysVisible;
+                viewportAxes.visible = overlaysVisible;
                 document.getElementById('safe-area').style.display = overlaysVisible ? 'block' : 'none';
 
                 if (!overlaysVisible) transformControl.detach();
@@ -1792,7 +1801,7 @@
                     mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: parseInt(colorStr, 16) || 0xffffff, transparent: true, opacity: 1, roughness: 0.2 }));
                 }
 
-                const initialY = (type === 'cube') ? 1 : (type === 'sphere' ? 1.2 : 0);
+                const initialY = 0;
                 mesh.position.set(0, initialY, 0); 
                 mesh.visible = true;
                 scene.add(mesh);
@@ -1888,7 +1897,34 @@
 
             function initClipInteraction(item, data) {
                 let activeAction = null, startX, startY, initIn, initOut, initDur, initStartBeat;
+                let lastClickTime = 0;
                 item.addEventListener('pointerdown', (e) => {
+                    const currentTime = Date.now();
+                    if (currentTime - lastClickTime < 300) {
+                        // CUSTOM DOUBLE TAP
+                        if (data.type === 'effect') {
+                            const totalDurationBeats = (state.duration / state.fps) * (state.bpm / 60);
+                            data.startBeat = 0;
+                            data.duration = totalDurationBeats;
+                            data.propIn = 0;
+                            data.propOut = 0;
+                            updateClipDOM(item, data);
+                            updateScene(state.playheadBeat);
+                        } else {
+                            // Duplicate
+                            const newId = addClip(data.layer, data.startBeat + data.duration, data.duration, data.originalColor, data.type, data.name + " Copy");
+                            const newClip = state.clips.find(c => c.id === newId);
+                            const { id, mesh, startBeat, name, ...rest } = data;
+                            Object.assign(newClip, rest); 
+                            newClip.startBeat = data.startBeat + data.duration;
+                            updateClipDOM(document.getElementById(newId), newClip);
+                            updateScene(state.playheadBeat);
+                            selectClip(newId);
+                        }
+                        return;
+                    }
+                    lastClickTime = currentTime;
+
                     e.stopPropagation(); selectClip(data.id);
                     item.setPointerCapture(e.pointerId);
                     startX = e.clientX; startY = e.clientY; initIn = data.propIn; initOut = data.propOut; initDur = data.duration; initStartBeat = data.startBeat;
@@ -1903,9 +1939,12 @@
                     if (activeAction === 'move') {
                         let proposedStart = Math.max(0, snap(initStartBeat + beatsDelta));
                         let proposedLayer = data.layer;
+                        let minDist = Infinity;
                         document.querySelectorAll('.layer').forEach(l => {
                             const rect = l.getBoundingClientRect();
-                            if (e.clientY >= rect.top && e.clientY <= rect.bottom) proposedLayer = parseInt(l.dataset.layer);
+                            const mid = (rect.top + rect.bottom) / 2;
+                            const dist = Math.abs(e.clientY - mid);
+                            if (dist < minDist) { minDist = dist; proposedLayer = parseInt(l.dataset.layer); }
                         });
                         if (!checkCollision(data.id, proposedLayer, proposedStart, data.duration)) {
                             data.startBeat = proposedStart;

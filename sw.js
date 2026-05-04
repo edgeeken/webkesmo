@@ -1,4 +1,4 @@
-const CACHE_NAME = 'web-kesmo-v1';
+const CACHE_NAME = 'web-kesmo-v6';
 const urlsToCache = [
   './',
   './index.html',
