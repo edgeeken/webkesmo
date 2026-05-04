@@ -1,0 +1,2596 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Web.Kesmo - 3D Motion Director</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MotionApp">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.156.1/examples/jsm/"
+        }
+    }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-main: #000000;
+            --bg-viewport: #0a0a0a;
+            --bg-panel: #0a0a0a;
+            --bg-header: #111111;
+            --bg-toolbar: #151515;
+            --border: #222222;
+            --accent: #2F69FF;
+            --action-color: #00e676;
+            --effect-color: #aa00ff;
+            --text-main: #ffffff;
+            --text-muted: #555555;
+            --item-bg: #1e1e1e;
+            --handle-edge: rgba(255, 255, 255, 0.2);
+            --ios-safe-bottom: env(safe-area-inset-bottom);
+            --beat-width: 60px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-size: 11px;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            touch-action: none;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            position: relative;
+        }
+
+        #top-header {
+            height: 40px;
+            background-color: var(--bg-header);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            z-index: 1000;
+        }
+
+        .header-logo {
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: var(--accent);
+            cursor: pointer;
+        }
+
+        .header-btns {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-header {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: #ccc;
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-header:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-color: #555;
+        }
+
+        .btn-header svg {
+            width: 12px;
+            height: 12px;
+            fill: currentColor;
+        }
+
+        /* === VIEWPORT & SAFE AREA === */
+        #viewport {
+            flex: 1; /* Changed from 45vh to flex:1 */
+            background-color: var(--bg-viewport);
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #viewport canvas {
+            display: block;
+        }
+
+        #safe-area {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .ar-selector {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 10;
+        }
+
+        .ar-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #888;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 6px 4px;
+            text-align: center;
+            border-radius: 4px;
+            width: 34px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .ar-btn.active {
+            background: rgba(47, 105, 255, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .fov-roller {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            width: 34px;
+            padding: 6px 0;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            cursor: ns-resize;
+            margin-top: 5px;
+            touch-action: none;
+        }
+
+        .fov-roller span {
+            pointer-events: none;
+        }
+
+        .vp-tools {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 10;
+            align-items: flex-end;
+        }
+
+        .eye-btn,
+        .tool-btn {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            color: #aaa;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            backdrop-filter: blur(4px);
+        }
+
+        .eye-btn {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        .eye-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .eye-btn.disabled {
+            opacity: 0.5;
+            color: #777;
+        }
+
+        .tool-btn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+        }
+
+        .tool-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        .tool-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        /* === MIDDLE TOOLBAR === */
+        #toolbar {
+            height: 48px;
+            background-color: var(--bg-toolbar);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 0 10px;
+        }
+
+        .tb-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            height: 36px;
+            padding: 0 8px;
+            flex: 1;
+            max-width: 120px;
+        }
+
+        .tb-label {
+            font-size: 8px;
+            color: var(--text-muted);
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+        }
+
+        .tb-values {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .val-dim {
+            color: #444;
+            font-size: 12px;
+        }
+
+        .val-active {
+            color: #fff;
+        }
+
+        /* === TIMELINE AREA === */
+        #timeline-container {
+            flex: 1;
+            background-color: #050505;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .timeline-body {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: auto;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            cursor: grab;
+            touch-action: pan-x pan-y;
+        }
+
+        .timeline-body.grabbing {
+            cursor: grabbing;
+        }
+
+        #timeline-tracks-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-width: 100%;
+            min-height: 100%;
+            width: fit-content;
+        }
+
+        #timeline-bg-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 0;
+            background-color: #111;
+            border-right: 1px solid #333;
+            background-image: 
+                linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+        }
+
+        #timeline-ruler {
+            height: 24px;
+            flex-shrink: 0;
+            position: relative;
+            border-bottom: 1px solid var(--border);
+            cursor: ew-resize;
+            background: rgba(21, 21, 21, 0.9);
+            z-index: 50;
+            overflow: hidden;
+        }
+
+        #timeline-layers-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            width: 100%;
+            z-index: 10;
+            min-height: fit-content;
+        }
+
+        #playhead {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 2px;
+            background-color: var(--accent);
+            z-index: 9999;
+            pointer-events: auto;
+            cursor: ew-resize;
+            touch-action: none;
+        }
+
+        #playhead::before {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: -8px;
+            width: 18px;
+            height: 18px;
+            background-color: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(47, 105, 255, 0.8);
+            z-index: 10000;
+            border: 2px solid #fff;
+        }
+
+        .layer {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            min-height: 35px;
+        }
+
+        /* === TIMELINE CLIPS === */
+        .timeline-item {
+            position: absolute;
+            height: 80%;
+            background-color: var(--item-bg);
+            border: 1px solid #444;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            min-width: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            cursor: default;
+            transition: border-color 0.2s;
+            touch-action: none;
+        }
+
+        .timeline-item.selected {
+            border-color: var(--accent);
+            background-color: #1a233a;
+            z-index: 10;
+        }
+
+        .timeline-item.has-effect {
+            border-color: var(--effect-color);
+            box-shadow: 0 0 12px rgba(170, 0, 255, 0.4);
+            border-width: 2px;
+        }
+
+        .item-blend-zone {
+            height: 100%;
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+        }
+
+        .item-in {
+            border-radius: 3px 0 0 3px;
+            border-right: 1px dashed rgba(255, 255, 255, 0.2);
+            justify-content: flex-end;
+        }
+
+        .item-out {
+            border-radius: 0 3px 3px 0;
+            border-left: 1px dashed rgba(255, 255, 255, 0.2);
+            justify-content: flex-start;
+        }
+
+        .item-mid {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: #ccc;
+            cursor: grab;
+            height: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .ag-cell {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: row; /* Horizontal */
+            align-items: center;
+            justify-content: center;
+            gap: 12px; /* Space between numbers */
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+            cursor: ew-resize;
+            user-select: none;
+            touch-action: none;
+            position: relative;
+            overflow: hidden;
+            height: 36px;
+        }
+
+        .ag-cell.active {
+            border-color: var(--accent);
+            background: #1a1a1a;
+        }
+
+        .ag-cell .roller-dim {
+            font-size: 8px;
+            color: #444;
+            opacity: 0.5;
+            width: 30px;
+            text-align: center;
+        }
+
+        .ag-cell .roller-active {
+            font-size: 12px;
+            font-weight: 700;
+            color: #fff;
+            width: 35px;
+            text-align: center;
+        }
+
+        .handle-edge {
+            position: absolute;
+            width: 12px;
+            height: 100%;
+            top: 0;
+            background: var(--handle-edge);
+            cursor: ew-resize;
+            z-index: 5;
+        }
+
+        .handle-edge-left {
+            left: 0;
+            border-radius: 3px 0 0 3px;
+        }
+
+        .handle-edge-right {
+            right: 0;
+            border-radius: 0 3px 3px 0;
+        }
+
+        /* HANDLES */
+        .handle-fade {
+            position: absolute;
+            width: 8px;
+            height: calc(100% + 12px);
+            top: -6px;
+            background: #888;
+            border-radius: 4px;
+            cursor: ew-resize;
+            z-index: 15;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+            transition: 0.2s;
+        }
+
+        .timeline-item.selected .handle-fade {
+            background: var(--accent);
+        }
+
+        .handle-fade-in {
+            right: -4px;
+        }
+
+        .handle-fade-out {
+            left: -4px;
+        }
+
+        .timeline-item.has-action .handle-fade {
+            background: var(--action-color);
+            border-radius: 0;
+            height: 100%;
+            top: 0;
+            width: 4px;
+        }
+
+        .timeline-item.has-effect .handle-fade {
+            background: var(--effect-color);
+            border-radius: 0;
+            height: 100%;
+            top: 0;
+            width: 4px;
+        }
+
+        .handle-h {
+            position: absolute;
+            width: 40px;
+            height: 8px;
+            left: calc(50% - 20px);
+            background: #888;
+            border-radius: 4px;
+            cursor: ew-resize;
+            z-index: 20;
+            opacity: 0.6;
+            transition: opacity 0.2s, background 0.2s;
+        }
+
+        .timeline-item.selected .handle-h {
+            background: var(--accent);
+            opacity: 1;
+        }
+
+        .timeline-item:hover .handle-h {
+            opacity: 1;
+        }
+
+        .handle-h-top {
+            top: -4px;
+            cursor: ns-resize;
+        }
+
+        .handle-h-bottom {
+            bottom: -4px;
+            cursor: ns-resize;
+        }
+
+        /* === TIMELINE FOOTER === */
+        #timeline-footer {
+            height: 45px;
+            background-color: var(--bg-toolbar);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            z-index: 60;
+            gap: 15px;
+        }
+
+        #play-btn-circle {
+            width: 28px;
+            height: 28px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        #play-btn-circle svg {
+            width: 14px;
+            height: 14px;
+            fill: #fff;
+            margin-left: 2px;
+        }
+
+        #play-btn-circle.playing svg {
+            margin-left: 0;
+        }
+
+        .full-roller {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            cursor: ew-resize;
+            overflow: hidden;
+            position: relative;
+            gap: 12px;
+            padding-left: 5px;
+            touch-action: none;
+        }
+
+        .full-roller::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: 0;
+            width: 30%;
+            background: linear-gradient(-90deg, var(--bg-toolbar), transparent);
+            pointer-events: none;
+        }
+
+        .fr-val {
+            font-size: 14px;
+            font-weight: 600;
+            color: #444;
+            font-variant-numeric: tabular-nums;
+            transition: 0.1s;
+            flex-shrink: 0;
+        }
+
+        .fr-val.active {
+            color: var(--accent);
+            font-size: 18px;
+            text-shadow: 0 0 10px rgba(47, 105, 255, 0.5);
+        }
+
+        .fr-arrow {
+            color: #555;
+            font-size: 16px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        /* === BOTTOM BAR === */
+        #bottom-bar {
+            height: 60px;
+            background-color: var(--bg-header);
+            border-top: 1px solid var(--border);
+            display: flex;
+            padding-bottom: var(--ios-safe-bottom);
+            position: relative;
+            z-index: 300;
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            cursor: pointer;
+            position: relative;
+            min-width: 0;
+            padding: 0 2px;
+        }
+
+        .tab-icon {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+            z-index: 2;
+        }
+
+        .tab-label {
+            font-size: 7px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            z-index: 2;
+        }
+
+        .tab-btn::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            bottom: 8px;
+            left: 5%;
+            right: 5%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            opacity: 0;
+            transition: 0.2s;
+            z-index: 1;
+        }
+
+        .tab-btn.active {
+            color: #fff;
+        }
+
+        .tab-btn.active::before {
+            opacity: 1;
+        }
+
+        /* === PANELS === */
+        #panels-container {
+            position: fixed; /* Fixed to cover screen */
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--bg-panel);
+            border-top: 1px solid var(--border);
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
+            z-index: 50000; /* Max priority */
+            height: 40vh; /* Reduced height to avoid covering viewport */
+            box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+
+        #panels-container.open {
+            transform: translateY(0);
+        }
+
+        .panel {
+            display: none;
+            padding: 20px;
+            padding-bottom: 40px;
+            flex: 1;
+            overflow-y: auto;
+            touch-action: pan-y;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            position: sticky;
+            top: -20px;
+            background: var(--bg-panel);
+            z-index: 10;
+            padding: 10px 0;
+            border-bottom: 1px solid #222;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .assets-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .asset-item {
+            background: var(--item-bg);
+            border: 1px solid var(--border);
+            padding: 15px 5px;
+            text-align: center;
+            border-radius: 8px;
+            color: #ccc;
+            cursor: grab;
+            font-weight: 600;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+
+        .prop-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-bottom: 30px;
+        }
+
+        .prop-group-title {
+            font-size: 10px;
+            color: #777;
+            text-transform: uppercase;
+            margin-top: 5px;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+            font-weight: bold;
+        }
+
+        /* THE MATRIX GRID */
+        .action-grid {
+            display: grid;
+            grid-template-columns: 45px repeat(4, 1fr);
+            gap: 6px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .ag-header {
+            font-size: 8px;
+            color: #888;
+            text-align: center;
+            font-weight: 700;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+
+        .ag-label {
+            font-size: 9px;
+            font-weight: bold;
+            color: #aaa;
+        }
+
+        .ag-cell {
+            background: #151515;
+            border: 1px solid #333;
+            color: #fff;
+            font-size: 11px;
+            text-align: center;
+            padding: 10px 0;
+            border-radius: 4px;
+            cursor: ns-resize;
+            touch-action: none;
+            transition: 0.1s;
+        }
+
+        .ag-cell:active {
+            border-color: var(--accent);
+            background: #1a1a1a;
+        }
+
+        .font-roller {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #151515;
+            border: 1px solid #333;
+            border-radius: 6px;
+            height: 60px;
+            cursor: ns-resize;
+            overflow: hidden;
+            margin-bottom: 10px;
+            touch-action: none;
+        }
+
+        .font-roller span {
+            font-size: 14px;
+            font-weight: bold;
+            transition: 0.2s;
+            pointer-events: none;
+        }
+
+        .material-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+            align-items: center;
+        }
+
+        .mat-swatch {
+            width: 45px;
+            height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.1);
+            transition: all 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .mat-swatch.active {
+            width: 65px;
+            height: 36px;
+            border-color: #fff;
+            transform: scale(1.1);
+            box-shadow: 0 0 15px var(--accent);
+            z-index: 2;
+        }
+
+        .btn-sm-action {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: 4px;
+            padding: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 26px;
+            min-width: 26px;
+            transition: 0.2s;
+        }
+
+        .btn-sm-action:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-sm-danger {
+            background: rgba(255, 0, 85, 0.1);
+            border: 1px solid #ff0055;
+            color: #ff0055;
+        }
+
+        .btn-sm-danger:hover {
+            background: #ff0055;
+            color: #fff;
+        }
+
+        .btn-sm-action svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <!-- Top Header -->
+        <div id="top-header">
+            <div class="header-logo" id="btn-install-hint">WEB.KESMO</div>
+            <div class="header-btns">
+                <button class="btn-header" id="btn-pwa-install" style="display:none; background: var(--accent); border-color: var(--accent); color: #fff;">
+                    INSTALL
+                </button>
+                <button class="btn-header" id="btn-open-proj">
+                    <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+                    OPEN
+                </button>
+                <button class="btn-header" id="btn-save-proj">
+                    <svg viewBox="0 0 24 24"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm2 16H5V5h11.17L19 7.83V19zm-7-7c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zM6 6h9v4H6V6z"/></svg>
+                    SAVE
+                </button>
+            </div>
+        </div>
+
+        <!-- 3D Viewport -->
+        <div id="viewport">
+            <div id="safe-area"></div>
+            <div class="ar-selector">
+                <div class="ar-btn active" data-ratio="1">1:1</div>
+                <div class="ar-btn" data-ratio="1.777">16:9</div>
+                <div class="ar-btn" data-ratio="0.5625">9:16</div>
+                <div class="fov-roller" id="roller-fov" title="Drag vertical for FOV">
+                    <span style="font-size: 8px; color: #888;">FOV</span>
+                    <span id="fov-val" style="font-size: 11px; font-weight: bold; color: #fff;">70</span>
+                </div>
+            </div>
+            <div class="vp-tools">
+                <div class="eye-btn" title="Toggle Overlays">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
+                    </svg>
+                </div>
+                <div class="tool-btn active" data-tool="translate" title="Location (LOC)">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 2L8 6h3v5H6V8L2 12l4 4v-3h5v5H8l4 4 4-4h-3v-5h5v3l4-4-4-4v3h-5V6h3z" />
+                    </svg>
+                </div>
+                <div class="tool-btn" data-tool="rotate" title="Rotation (ROT)">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z" />
+                    </svg>
+                </div>
+                <div class="tool-btn" data-tool="scale" title="Scale (SCALE)">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M10 21v-2H6.41l4.5-4.5-1.41-1.41-4.5 4.5V14H3v7h7zm4.5-10.09L19 6.41V10h2V3h-7v2h3.59l-4.5 4.5 1.41 1.41z" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div id="toolbar">
+            <div class="tb-group" id="format-toggle" style="cursor: pointer; padding: 0 15px;">
+                <div class="tb-label" style="margin:0; padding-bottom: 2px;">FMT</div>
+                <div class="tb-values"><span id="fmt-val" class="val-active">FRM</span></div>
+            </div>
+            <div class="tb-group">
+                <div class="tb-label">BPM</div>
+                <div class="tb-values" id="roller-bpm" style="cursor: ew-resize; touch-action: none;">
+                    <span class="val-dim" id="bpm-down">119</span><span class="val-active" id="bpm-val">120</span><span
+                        class="val-dim" id="bpm-up">121</span>
+                </div>
+            </div>
+            <div class="tb-group">
+                <div class="tb-label">FPS</div>
+                <div class="tb-values" id="roller-fps" style="cursor: ew-resize; touch-action: none;">
+                    <span class="val-dim" id="fps-down">29</span><span class="val-active" id="fps-val">30</span><span
+                        class="val-dim" id="fps-up">31</span>
+                </div>
+            </div>
+            <div class="tb-group">
+                <div class="tb-label">DURATION</div>
+                <div class="tb-values" id="roller-dur" style="cursor: ew-resize; touch-action: none;">
+                    <span class="val-dim" id="dur-down">299</span><span class="val-active" id="dur-val">300</span><span
+                        class="val-dim" id="dur-up">301</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline Container -->
+        <div id="timeline-container">
+            <div class="timeline-body" id="timeline-scroll">
+                <div id="timeline-tracks-container">
+                    <div id="timeline-bg-grid"></div>
+                    <div id="timeline-ruler"></div>
+                    <div id="timeline-layers-container"></div>
+                    <div id="playhead"></div>
+                </div>
+            </div>
+
+            <div id="timeline-footer">
+                <div id="play-btn-circle">
+                    <svg id="icon-play" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <svg id="icon-pause" viewBox="0 0 24 24" style="display:none; margin:0;">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                </div>
+                <div class="full-roller" id="roller-frame">
+                    <span class="fr-arrow">&lt;</span>
+                    <span class="fr-val active" id="fr-active">1</span>
+                    <div id="fr-dynamic-spans" style="display:flex; gap:12px;"></div>
+                    <span class="fr-arrow"
+                        style="margin-left: auto; margin-right: 10px; position: sticky; right: 0;">&gt;</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panels -->
+        <div id="panels-container">
+            <div class="panel" id="panel-props">
+                <div class="panel-header">
+                    <span>Properties</span>
+                    <div class="header-actions">
+                        <button class="btn-sm-action btn-sm-danger" id="btn-delete-clip" style="display:none;"
+                            title="Delete Selected Clip">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                            </svg>
+                        </button>
+                        <button class="btn-sm-action btn-close-panel" title="Close Panel">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="props-placeholder" style="color:#666;">Select an item on timeline to edit</div>
+
+                <div id="props-content" style="display:none;" class="prop-grid">
+
+                    <!-- Basic Transforms -->
+                    <div class="prop-group-title tr-basic-group">Basic Transform</div>
+                    <div class="action-grid tr-basic-group" id="basic-grid" style="grid-template-columns: 45px 1fr 1fr 1fr; margin-bottom: 10px;">
+                        <div class="ag-label" style="color:var(--accent)">LOC</div>
+                        <div class="ag-cell" data-arr="locX" data-idx="0" id="bas-locX">0.0</div>
+                        <div class="ag-cell" data-arr="locY" data-idx="0" id="bas-locY">0.0</div>
+                        <div class="ag-cell" data-arr="locZ" data-idx="0" id="bas-locZ">0.0</div>
+                        
+                        <div class="ag-label" style="color:var(--accent)">ROT</div>
+                        <div class="ag-cell" data-arr="rotX" data-idx="0" id="bas-rotX">0.0</div>
+                        <div class="ag-cell" data-arr="rotY" data-idx="0" id="bas-rotY">0.0</div>
+                        <div class="ag-cell" data-arr="rotZ" data-idx="0" id="bas-rotZ">0.0</div>
+                        
+                        <div class="ag-label" style="color:var(--accent)">SCL</div>
+                        <div class="ag-cell" data-arr="sclX" data-idx="0" id="bas-sclX">1.0</div>
+                        <div class="ag-cell" data-arr="sclY" data-idx="0" id="bas-sclY">1.0</div>
+                        <div class="ag-cell" data-arr="sclZ" data-idx="0" id="bas-sclZ">1.0</div>
+                    </div>
+
+                    <!-- Opacity Matrix with Checkbox -->
+                    <div class="prop-group-title tr-group" style="display:flex; justify-content:space-between; align-items:center;">
+                        Opacity Matrix (K1-K4)
+                        <label style="color:#fff; font-size:9px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="checkbox" id="chk-use-opc"> Enable
+                        </label>
+                    </div>
+                    <div class="action-grid tr-group" id="opc-grid">
+                        <div class="ag-header"></div>
+                        <div class="ag-header">K1</div><div class="ag-header">K2</div><div class="ag-header">K3</div><div class="ag-header">K4</div>
+                        <div class="ag-label" style="color:#aaa">OPC</div>
+                        <div class="ag-cell" data-arr="opc" data-idx="0" id="ag-opc-0">0.0</div>
+                        <div class="ag-cell" data-arr="opc" data-idx="1" id="ag-opc-1">1.0</div>
+                        <div class="ag-cell" data-arr="opc" data-idx="2" id="ag-opc-2">1.0</div>
+                        <div class="ag-cell" data-arr="opc" data-idx="3" id="ag-opc-3">0.0</div>
+                    </div>
+
+                    <!-- THE ACTION MATRIX -->
+                    <div class="prop-group-title tr-action-group">Action Matrix (K1 - K4)</div>
+                    <div class="action-grid tr-action-group" id="matrix-grid">
+                        <div class="ag-header"></div>
+                        <div class="ag-header" title="Start of Clip">K1</div>
+                        <div class="ag-header" title="Fade In End">K2</div>
+                        <div class="ag-header" title="Fade Out Start">K3</div>
+                        <div class="ag-header" title="End of Clip">K4</div>
+
+                        <!-- Transforms -->
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">LOC X</div>
+                        <div class="ag-cell tr-action-group" data-arr="locX" data-idx="0" id="ag-locX-0">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locX" data-idx="1" id="ag-locX-1">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locX" data-idx="2" id="ag-locX-2">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locX" data-idx="3" id="ag-locX-3">0.0</div>
+
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">LOC Y</div>
+                        <div class="ag-cell tr-action-group" data-arr="locY" data-idx="0" id="ag-locY-0">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locY" data-idx="1" id="ag-locY-1">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locY" data-idx="2" id="ag-locY-2">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locY" data-idx="3" id="ag-locY-3">0.0</div>
+
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">LOC Z</div>
+                        <div class="ag-cell tr-action-group" data-arr="locZ" data-idx="0" id="ag-locZ-0">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locZ" data-idx="1" id="ag-locZ-1">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locZ" data-idx="2" id="ag-locZ-2">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="locZ" data-idx="3" id="ag-locZ-3">0.0</div>
+
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">ROT X</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotX" data-idx="0" id="ag-rotX-0">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotX" data-idx="1" id="ag-rotX-1">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotX" data-idx="2" id="ag-rotX-2">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotX" data-idx="3" id="ag-rotX-3">0.0</div>
+
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">ROT Y</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotY" data-idx="0" id="ag-rotY-0">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotY" data-idx="1" id="ag-rotY-1">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotY" data-idx="2" id="ag-rotY-2">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotY" data-idx="3" id="ag-rotY-3">0.0</div>
+
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">ROT Z</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotZ" data-idx="0" id="ag-rotZ-0">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotZ" data-idx="1" id="ag-rotZ-1">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotZ" data-idx="2" id="ag-rotZ-2">0.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="rotZ" data-idx="3" id="ag-rotZ-3">0.0</div>
+
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">SCL X</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclX" data-idx="0" id="ag-sclX-0">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclX" data-idx="1" id="ag-sclX-1">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclX" data-idx="2" id="ag-sclX-2">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclX" data-idx="3" id="ag-sclX-3">1.0</div>
+
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">SCL Y</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclY" data-idx="0" id="ag-sclY-0">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclY" data-idx="1" id="ag-sclY-1">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclY" data-idx="2" id="ag-sclY-2">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclY" data-idx="3" id="ag-sclY-3">1.0</div>
+
+                        <div class="ag-label tr-action-group" style="color:var(--accent)">SCL Z</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclZ" data-idx="0" id="ag-sclZ-0">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclZ" data-idx="1" id="ag-sclZ-1">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclZ" data-idx="2" id="ag-sclZ-2">1.0</div>
+                        <div class="ag-cell tr-action-group" data-arr="sclZ" data-idx="3" id="ag-sclZ-3">1.0</div>
+
+                        <!-- Effect Row -->
+                        <div class="ag-label eff-group" style="color:var(--effect-color); display:none;"
+                            id="ag-lbl-eff">EFF</div>
+                        <div class="ag-cell eff-group" data-arr="eff" data-idx="0" id="ag-eff-0"
+                            style="display:none; border-color:var(--effect-color);">0.0</div>
+                        <div class="ag-cell eff-group" data-arr="eff" data-idx="1" id="ag-eff-1"
+                            style="display:none; border-color:var(--effect-color);">1.0</div>
+                        <div class="ag-cell eff-group" data-arr="eff" data-idx="2" id="ag-eff-2"
+                            style="display:none; border-color:var(--effect-color);">1.0</div>
+                        <div class="ag-cell eff-group" data-arr="eff" data-idx="3" id="ag-eff-3"
+                            style="display:none; border-color:var(--effect-color);">0.0</div>
+                    </div>
+
+                    <!-- Text Font Scroller -->
+                    <div class="font-roller" id="prop-font" style="display:none;">
+                        <span id="f-top" style="color:#444; font-size: 10px;">Arial</span>
+                        <span id="f-mid" style="color:var(--accent); font-size: 16px;">Impact</span>
+                        <span id="f-bot" style="color:#444; font-size: 10px;">Courier</span>
+                    </div>
+
+                    <!-- Materials -->
+                    <div class="prop-group-title mat-group" style="display:none;">Material Color</div>
+                    <div class="material-row mat-group" id="prop-mat">
+                        <div class="mat-swatch" style="background: #ffffff;" data-color="0xffffff"></div>
+                        <div class="mat-swatch" style="background: #2F69FF;" data-color="0x2F69FF"></div>
+                        <div class="mat-swatch" style="background: #ff0055;" data-color="0xff0055"></div>
+                        <div class="mat-swatch" style="background: #ffaa00;" data-color="0xffaa00"></div>
+                        <div class="mat-swatch" style="background: #00ffaa;" data-color="0x00ffaa"></div>
+                    </div>
+
+                    <div class="prop-group-title mat-group" style="display:none; margin-top:10px;">Roughness & Emit</div>
+                    <div class="action-grid mat-group" style="display:none; grid-template-columns: 45px 1fr 1fr; margin-bottom: 10px;">
+                        <div class="ag-label" style="color:#aaa">VAL</div>
+                        <div class="ag-cell" data-arr="rough" data-idx="0" id="bas-rough">0.5</div>
+                        <div class="ag-cell" data-arr="emit" data-idx="0" id="bas-emit">0.0</div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="panel" id="panel-assets">
+                <div class="panel-header">
+                    <span>Assets (Drag & Drop)</span>
+                    <button class="btn-sm-action btn-close-panel" title="Close Panel">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="assets-grid">
+                    <div class="asset-item" data-type="text" data-color="0xffffff" style="border-color:#fff;">T TEXT
+                    </div>
+                    <div class="asset-item" data-type="cube" data-color="0x2F69FF">Cube</div>
+                    <div class="asset-item" data-type="sphere" data-color="0xffffff">Sphere</div>
+                    <div class="asset-item" data-type="cube" data-color="0xff0055">Pink Cube</div>
+                </div>
+            </div>
+
+            <div class="panel" id="panel-effects">
+                <div class="panel-header">
+                    <span>Effects (Drag onto Clip or Empty)</span>
+                    <button class="btn-sm-action btn-close-panel" title="Close Panel">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="assets-grid effects-grid">
+                    <div class="asset-item effect-item"
+                        style="border-color:var(--effect-color); color:var(--effect-color)">Glitch</div>
+                    <div class="asset-item effect-item"
+                        style="border-color:var(--effect-color); color:var(--effect-color)">Lens</div>
+                    <div class="asset-item effect-item"
+                        style="border-color:var(--effect-color); color:var(--effect-color)">Noise</div>
+                </div>
+            </div>
+
+            <div class="panel" id="panel-actions">
+                <div class="panel-header">
+                    <span>Actions (Drag onto Clip)</span>
+                    <button class="btn-sm-action btn-close-panel" title="Close Panel">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="assets-grid actions-grid">
+                    <div class="asset-item action-item"
+                        style="border-color:var(--action-color); color:var(--action-color)">Slide</div>
+                    <div class="asset-item action-item"
+                        style="border-color:var(--action-color); color:var(--action-color)">Spin</div>
+                    <div class="asset-item action-item"
+                        style="border-color:var(--action-color); color:var(--action-color)">Pop</div>
+                </div>
+            </div>
+
+            <div class="panel" id="panel-beats">
+                <div class="panel-header">
+                    <span>Beats & Audio</span>
+                    <button class="btn-sm-action btn-close-panel" title="Close Panel">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="assets-grid">
+                    <div class="asset-item" data-type="audio" data-duration="4"
+                        style="border-color:#00ffaa; color:#00ffaa;">Drum Loop</div>
+                    <div class="asset-item" data-type="audio" data-duration="2"
+                        style="border-color:#00ffaa; color:#00ffaa;">Synth Bass</div>
+                    <div class="asset-item" data-type="audio" data-duration="8"
+                        style="border-color:#00ffaa; color:#00ffaa;">Ambient</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <div id="bottom-bar">
+            <button class="tab-btn active" data-target="timeline"><svg class="tab-icon" viewBox="0 0 24 24">
+                    <path
+                        d="M17 7h-4v2h4c1.65 0 3 1.35 3 3s-1.35 3-3 3h-4v2h4c2.76 0 5-2.24 5-5s-2.24-5-5-5zm-6 8H7c-1.65 0-3-1.35-3-3s1.35-3 3-3h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-2zm-3-4h8v2H8z" />
+                </svg><span class="tab-label">TIMELINE</span></button>
+            <button class="tab-btn" data-target="props"><svg class="tab-icon" viewBox="0 0 24 24">
+                    <path
+                        d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z" />
+                </svg><span class="tab-label">PROPS</span></button>
+            <button class="tab-btn" data-target="assets"><svg class="tab-icon" viewBox="0 0 24 24">
+                    <path
+                        d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                </svg><span class="tab-label">ASSETS</span></button>
+            <button class="tab-btn" data-target="effects"><svg class="tab-icon" viewBox="0 0 24 24">
+                    <path
+                        d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8.5 3c.83 0 1.5.67 1.5 1.5S11.33 9 10.5 9 9 8.33 9 7.5 9.67 6 10.5 6zm2 11H9v-5h3.5v5zm1.5-6.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+                </svg><span class="tab-label">EFFECTS</span></button>
+            <button class="tab-btn" data-target="actions"><svg class="tab-icon" viewBox="0 0 24 24">
+                    <path
+                        d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66C7.67 12.24 9.02 9.68 11.5 5h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z" />
+                </svg><span class="tab-label">ACTIONS</span></button>
+            <button class="tab-btn" data-target="beats"><svg class="tab-icon" viewBox="0 0 24 24">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg><span class="tab-label">BEATS</span></button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { ViewHelper } from 'three/addons/helpers/ViewHelper.js';
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const state = {
+                isPlaying: false, bpm: 120, fps: 30, duration: 300,
+                beatWidth: 60, format: 0, playheadBeat: 0,
+                clips: [], selectedClipId: null, aspectRatio: 1,
+                fonts: ['Arial', 'Impact', 'Courier', 'Georgia', 'Verdana', 'Times']
+            };
+
+            const snap = (val) => Math.round(val * 4) / 4;
+
+            // --- 1. Вьюпорт и PostProcessing ---
+            const container = document.getElementById('viewport');
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111111);
+
+            const camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(0, 0, 8);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: false });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            const gridHelper = new THREE.GridHelper(100, 100, 0xcccccc, 0x333333);
+            gridHelper.position.y = 0;
+            scene.add(gridHelper);
+
+            // Infinite Floor Axes
+            const xMat = new THREE.LineBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.5 });
+            const xGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-1000, 0.01, 0), new THREE.Vector3(1000, 0.01, 0)]);
+            scene.add(new THREE.Line(xGeo, xMat));
+
+            const zMat = new THREE.LineBasicMaterial({ color: 0x33ff33, transparent: true, opacity: 0.5 });
+            const zGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.01, -1000), new THREE.Vector3(0, 0.01, 1000)]);
+            scene.add(new THREE.Line(zGeo, zMat));
+
+            // Fog to disappear in distance
+            scene.fog = new THREE.Fog(0x0a0a0a, 5, 25);
+            scene.background = new THREE.Color(0x0a0a0a);
+
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(5, 5, 5);
+            scene.add(dirLight);
+
+            const viewHelper = new ViewHelper(camera, renderer.domElement);
+            const viewHelperDiv = document.createElement('div');
+            viewHelperDiv.style.cssText = 'position:absolute; right:15px; bottom:15px; width:80px; height:80px; z-index:10; cursor:pointer;';
+            container.appendChild(viewHelperDiv);
+            viewHelperDiv.addEventListener('pointerup', (e) => viewHelper.handleClick(e));
+
+            // POST-PROCESSING: Screen Space Effects
+            const composer = new EffectComposer(renderer);
+            const renderPass = new RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            const ScreenShader = {
+                uniforms: {
+                    "tDiffuse": { value: null }, "time": { value: 0.0 },
+                    "gEffType": { value: 0 }, "gEffInt": { value: 0.0 },
+                    "lEffType": { value: 0 }, "lEffInt": { value: 0.0 },
+                    "lBoxMin": { value: new THREE.Vector2(0, 0) }, "lBoxMax": { value: new THREE.Vector2(0, 0) }
+                },
+                vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse; uniform float time;
+                    uniform int gEffType; uniform float gEffInt;
+                    uniform int lEffType; uniform float lEffInt;
+                    uniform vec2 lBoxMin; uniform vec2 lBoxMax;
+                    varying vec2 vUv;
+                    
+                    float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
+                    
+                    void main() {
+                        vec2 uv = vUv;
+                        bool inBox = (uv.x >= lBoxMin.x && uv.x <= lBoxMax.x && uv.y >= lBoxMin.y && uv.y <= lBoxMax.y);
+                        vec2 offset = vec2(0.0);
+                        
+                        if (inBox && lEffInt > 0.0) {
+                            if (lEffType == 1) { 
+                                if(rand(vec2(time, floor(uv.y*20.0))) > 0.8) offset.x += (rand(vec2(time)) - 0.5) * lEffInt * 0.1;
+                            } else if (lEffType == 2) { 
+                                vec2 center = (lBoxMin + lBoxMax) * 0.5; vec2 d = uv - center;
+                                offset -= d * length(d) * lEffInt * 1.5;
+                            } else if (lEffType == 3) { 
+                                offset.x += (rand(uv + time) - 0.5) * lEffInt * 0.02;
+                            }
+                        }
+                        if (gEffInt > 0.0) {
+                            if (gEffType == 1) {
+                                if(rand(vec2(time, floor(uv.y*10.0))) > 0.9) offset.x += (rand(vec2(time+10.0)) - 0.5) * gEffInt * 0.1;
+                            } else if (gEffType == 2) {
+                                vec2 d = uv - 0.5; offset -= d * length(d) * gEffInt * 0.5;
+                            } else if (gEffType == 3) {
+                                offset.y += (rand(uv + time) - 0.5) * gEffInt * 0.02;
+                            }
+                        }
+
+                        vec4 color = texture2D(tDiffuse, uv + offset);
+                        
+                        if (inBox && lEffInt > 0.0) {
+                            if (lEffType == 1 && rand(vec2(time*10.0)) > 0.95) color.rgb = vec3(1.0) - color.rgb;
+                            if (lEffType == 3) color.rgb += vec3( (rand(uv + time) - 0.5) * lEffInt * 0.5 );
+                        }
+                        if (gEffInt > 0.0) {
+                            if (gEffType == 1 && rand(vec2(time*5.0)) > 0.9) color.rgb = vec3(1.0) - color.rgb;
+                            if (gEffType == 3) color.rgb += vec3( (rand(uv + time + 10.0) - 0.5) * gEffInt * 0.3 );
+                        }
+                        gl_FragColor = color;
+                    }
+                `
+            };
+            const screenPass = new ShaderPass(ScreenShader);
+            composer.addPass(screenPass);
+
+            // Controls
+            const orbitControls = new OrbitControls(camera, renderer.domElement);
+            orbitControls.enableDamping = true; orbitControls.dampingFactor = 0.05;
+
+            const transformControl = new TransformControls(camera, renderer.domElement);
+            scene.add(transformControl);
+            transformControl.addEventListener('dragging-changed', (e) => orbitControls.enabled = !e.value);
+            transformControl.addEventListener('change', () => {
+                if (state.selectedClipId && transformControl.object) {
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if (clip) {
+                        const dx = transformControl.object.position.x - clip.anim.locX[0];
+                        const dy = transformControl.object.position.y - clip.anim.locY[0];
+                        const dz = transformControl.object.position.z - clip.anim.locZ[0];
+                        const drx = transformControl.object.rotation.x - clip.anim.rotX[0];
+                        const dry = transformControl.object.rotation.y - clip.anim.rotY[0];
+                        const drz = transformControl.object.rotation.z - clip.anim.rotZ[0];
+                        const ds = transformControl.object.scale.x - clip.anim.scl[0];
+                        for (let i = 0; i < 4; i++) {
+                            clip.anim.locX[i] += dx; clip.anim.locY[i] += dy; clip.anim.locZ[i] += dz;
+                            clip.anim.rotX[i] += drx; clip.anim.rotY[i] += dry; clip.anim.rotZ[i] += drz;
+                            clip.anim.scl[i] += ds;
+                        }
+
+                        const p = document.getElementById('panel-props');
+                        if (p && p.classList.contains('active')) updatePropsPanelUI();
+                    }
+                }
+            });
+
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tool = btn.dataset.tool;
+                    if (btn.classList.contains('active')) {
+                        btn.classList.remove('active'); transformControl.detach(); transformControl.enabled = false;
+                    } else {
+                        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active'); transformControl.setMode(tool); transformControl.enabled = true;
+
+                        if (state.selectedClipId) {
+                            const clip = state.clips.find(c => c.id === state.selectedClipId);
+                            if (clip && clip.type !== 'audio' && clip.type !== 'effect') transformControl.attach(clip.mesh);
+                        }
+                    }
+                });
+            });
+
+            const fovRoller = document.getElementById('roller-fov');
+            let isFovDrag = false, fovStartY = 0, exactFov = camera.fov;
+            fovRoller.addEventListener('pointerdown', e => { isFovDrag = true; fovStartY = e.clientY; exactFov = camera.fov; fovRoller.setPointerCapture(e.pointerId); });
+            fovRoller.addEventListener('pointermove', e => {
+                if (!isFovDrag) return;
+                exactFov -= (e.clientY - fovStartY) * 0.5; fovStartY = e.clientY;
+                exactFov = Math.max(10, Math.min(150, exactFov));
+                camera.fov = exactFov; camera.updateProjectionMatrix();
+                document.getElementById('fov-val').innerText = Math.round(exactFov);
+            });
+            fovRoller.addEventListener('pointerup', () => isFovDrag = false);
+
+            function resizeViewport() {
+                let w = container.clientWidth; let h = container.clientHeight;
+                if (w === 0 || h === 0) return;
+                camera.aspect = w / h; camera.updateProjectionMatrix();
+                renderer.setSize(w, h); composer.setSize(w, h);
+
+                const safeArea = document.getElementById('safe-area');
+                let safeW = w, safeH = h;
+                if (state.aspectRatio) {
+                    if (w / h > state.aspectRatio) { safeW = h * state.aspectRatio; safeH = h; }
+                    else { safeW = w; safeH = w / state.aspectRatio; }
+                }
+                safeArea.style.width = safeW + 'px'; safeArea.style.height = safeH + 'px';
+            }
+            window.addEventListener('resize', resizeViewport);
+            new ResizeObserver(resizeViewport).observe(container);
+            resizeViewport();
+
+            let overlaysVisible = true;
+            document.querySelector('.eye-btn').addEventListener('click', () => {
+                overlaysVisible = !overlaysVisible;
+                gridHelper.visible = overlaysVisible;
+                document.getElementById('safe-area').style.display = overlaysVisible ? 'block' : 'none';
+
+                if (!overlaysVisible) transformControl.detach();
+                else if (state.selectedClipId) {
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if (clip && clip.type !== 'audio' && clip.type !== 'effect' && document.querySelector('.tool-btn.active')) transformControl.attach(clip.mesh);
+                }
+                document.querySelector('.eye-btn').classList.toggle('disabled', !overlaysVisible);
+            });
+
+            document.querySelectorAll('.ar-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.ar-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active'); state.aspectRatio = eval(btn.dataset.ratio); resizeViewport();
+                });
+            });
+
+            // --- 2. Логика Таймлайна ---
+            function updateTimelineBounds() {
+                const durationBeats = (state.duration / state.fps) * (state.bpm / 60);
+                const scrollCont = document.getElementById('timeline-scroll');
+
+                const minBeatWidth = scrollCont.clientWidth / Math.max(1, durationBeats);
+                if (state.beatWidth < minBeatWidth && durationBeats > 0) {
+                    state.beatWidth = minBeatWidth;
+                    document.documentElement.style.setProperty('--beat-width', state.beatWidth + 'px');
+                }
+
+                const widthPx = durationBeats * state.beatWidth;
+                const bgGrid = document.getElementById('timeline-bg-grid');
+                bgGrid.style.width = `${widthPx}px`;
+                bgGrid.style.backgroundSize = `${state.beatWidth}px 100%, ${state.beatWidth / 4}px 100%`;
+                document.getElementById('timeline-tracks-container').style.width = `${Math.max(scrollCont.clientWidth, widthPx)}px`;
+
+                const ruler = document.getElementById('timeline-ruler');
+                ruler.innerHTML = '';
+
+                let step = 1;
+                if (state.beatWidth > 40) step = 0.25;
+                else if (state.beatWidth > 20) step = 0.5;
+                else if (state.beatWidth < 5) step = 4;
+                else if (state.beatWidth < 10) step = 2;
+
+                for (let i = 0; i <= durationBeats; i += step) {
+                    if (i * state.beatWidth > widthPx) continue;
+                    const mark = document.createElement('div');
+                    const isMajor = i % 1 === 0;
+                    mark.style.cssText = `position:absolute; left:${i * state.beatWidth}px; border-left:1px solid ${isMajor ? '#666' : '#333'}; height:${isMajor ? '15px' : '8px'}; color:${isMajor ? '#bbb' : '#777'}; font-size:9px; padding-left:3px; top:${isMajor ? '9px' : '16px'}; pointer-events:none;`;
+                    if (isMajor || state.beatWidth > 120) {
+                        const sec = (i * 60) / state.bpm;
+                        mark.innerText = state.format === 0 ? Math.round(sec * state.fps) + 'f' : sec.toFixed(1) + 's';
+                    }
+                    ruler.appendChild(mark);
+                }
+                state.clips.forEach(c => updateClipDOM(document.getElementById(c.id), c));
+            }
+
+            const updateToolbarUI = () => {
+                document.getElementById('bpm-down').innerText = state.bpm - 1;
+                document.getElementById('bpm-val').innerText = state.bpm;
+                document.getElementById('bpm-up').innerText = state.bpm + 1;
+                document.getElementById('fps-down').innerText = state.fps - 1;
+                document.getElementById('fps-val').innerText = state.fps;
+                document.getElementById('fps-up').innerText = state.fps + 1;
+
+                let durDisp = state.duration;
+                if (state.format === 1) {
+                    durDisp = (state.duration / state.fps).toFixed(1);
+                    document.getElementById('dur-down').innerText = ((state.duration - state.fps) / state.fps).toFixed(1);
+                    document.getElementById('dur-up').innerText = ((state.duration + state.fps) / state.fps).toFixed(1);
+                } else {
+                    document.getElementById('dur-down').innerText = state.duration - 1;
+                    document.getElementById('dur-up').innerText = state.duration + 1;
+                }
+                document.getElementById('dur-val').innerText = durDisp;
+                document.getElementById('fmt-val').innerText = state.format === 0 ? 'FRM' : 'SEC';
+                updateTimelineBounds();
+            };
+
+            document.getElementById('format-toggle').addEventListener('click', () => { state.format = state.format === 0 ? 1 : 0; updateToolbarUI(); updateScene(state.playheadBeat); });
+
+            function initRoller(elementId, getter, setter, minFn, maxFn, onChange, roundFn = Math.round, speedFn = () => 0.3) {
+                const el = document.getElementById(elementId); if (!el) return;
+                let isDrag = false, startPos = 0, lastPos = 0, exactVal = 0, vel = 0, lastTime = 0, rafId;
+
+                el.addEventListener('pointerdown', (e) => {
+                    isDrag = true; startPos = e.clientX; lastPos = startPos; exactVal = getter(); lastTime = performance.now(); vel = 0;
+                    cancelAnimationFrame(rafId); el.setPointerCapture(e.pointerId);
+                });
+                el.addEventListener('pointermove', (e) => {
+                    if (!isDrag) return;
+                    const now = performance.now(); const dt = now - lastTime; const dx = e.clientX - lastPos;
+                    if (dt > 0) vel = dx / dt; lastPos = e.clientX; lastTime = now;
+                    exactVal -= dx * speedFn();
+                    let newVal = Math.max(minFn(), Math.min(maxFn(), roundFn(exactVal)));
+                    if (getter() !== newVal) { setter(newVal); if (onChange) onChange(); }
+                });
+                el.addEventListener('pointerup', (e) => {
+                    if (!isDrag) return; isDrag = false; el.releasePointerCapture(e.pointerId);
+                    if (Math.abs(e.clientX - startPos) < 3) {
+                        const rect = el.getBoundingClientRect(); const clickPos = e.clientX - rect.left;
+                        if (clickPos < rect.width / 3) exactVal = Math.max(minFn(), getter() - 1);
+                        else if (clickPos > (rect.width * 2) / 3) exactVal = Math.min(maxFn(), getter() + 1);
+                        setter(roundFn(exactVal)); if (onChange) onChange(); return;
+                    }
+                    const momentumLoop = () => {
+                        if (Math.abs(vel) < 0.02) return;
+                        exactVal -= vel * 16 * 0.3; vel *= 0.92;
+                        let newVal = Math.max(minFn(), Math.min(maxFn(), roundFn(exactVal)));
+                        if (getter() !== newVal) { setter(newVal); if (onChange) onChange(); }
+                        rafId = requestAnimationFrame(momentumLoop);
+                    }; momentumLoop();
+                });
+            }
+
+            initRoller('roller-bpm', () => state.bpm, (v) => state.bpm = v, () => 1, () => 999, updateToolbarUI);
+            initRoller('roller-fps', () => state.fps, (v) => state.fps = v, () => 1, () => 240, () => { updateToolbarUI(); updateScene(state.playheadBeat); });
+            initRoller('roller-dur', () => state.duration, (v) => state.duration = v, () => 1, () => 99999, updateToolbarUI);
+
+            initRoller('roller-frame',
+                () => state.format === 0 ? Math.round((state.playheadBeat * 60 / state.bpm) * state.fps) + 1 : (state.playheadBeat * 60 / state.bpm),
+                (v) => {
+                    const sec = state.format === 0 ? (v - 1) / state.fps : v;
+                    state.playheadBeat = Math.max(0, Math.min((sec * state.bpm) / 60, (state.duration / state.fps) * (state.bpm / 60)));
+                },
+                () => state.format === 0 ? 1 : 0, () => state.format === 0 ? state.duration : state.duration / state.fps, () => updateScene(state.playheadBeat),
+                (val) => state.format === 0 ? Math.round(val) : Math.round(val * 10) / 10, () => state.format === 0 ? 0.3 : 0.03
+            );
+
+            // --- 3. Таймлайн: Scrubbing, Zoom, Panning ---
+            const scrollContainer = document.getElementById('timeline-scroll');
+            const ruler = document.getElementById('timeline-ruler');
+            let isScrubbing = false;
+
+            const updatePlayheadFromEvent = (e) => {
+                const rect = document.getElementById('timeline-tracks-container').getBoundingClientRect();
+                const clickX = Math.max(0, e.clientX - rect.left);
+                const maxBeat = (state.duration / state.fps) * (state.bpm / 60);
+                state.playheadBeat = Math.max(0, Math.min(maxBeat, clickX / state.beatWidth));
+                updateScene(state.playheadBeat);
+            };
+            ruler.addEventListener('pointerdown', e => { isScrubbing = true; updatePlayheadFromEvent(e); ruler.setPointerCapture(e.pointerId); });
+            ruler.addEventListener('pointermove', e => { if (isScrubbing) updatePlayheadFromEvent(e); });
+            ruler.addEventListener('pointerup', e => { isScrubbing = false; ruler.releasePointerCapture(e.pointerId); });
+
+            const playheadEl = document.getElementById('playhead');
+            playheadEl.addEventListener('pointerdown', e => { e.stopPropagation(); isScrubbing = true; playheadEl.setPointerCapture(e.pointerId); });
+            playheadEl.addEventListener('pointermove', e => { if (isScrubbing) updatePlayheadFromEvent(e); });
+            playheadEl.addEventListener('pointerup', e => { isScrubbing = false; playheadEl.releasePointerCapture(e.pointerId); });
+            playheadEl.addEventListener('pointercancel', e => { isScrubbing = false; playheadEl.releasePointerCapture(e.pointerId); });
+            window.addEventListener('pointerup', () => { isScrubbing = false; });
+
+            // ZOOMING: Wheel
+            scrollContainer.addEventListener('wheel', e => {
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    const durationBeats = (state.duration / state.fps) * (state.bpm / 60);
+                    const minBeatWidth = scrollContainer.clientWidth / Math.max(1, durationBeats);
+                    const rect = scrollContainer.getBoundingClientRect();
+                    const beatAtMouse = (e.clientX - rect.left + scrollContainer.scrollLeft) / state.beatWidth;
+
+                    state.beatWidth = Math.max(minBeatWidth, Math.min(500, state.beatWidth * (e.deltaY > 0 ? 0.9 : 1.1)));
+                    updateTimelineBounds();
+
+                    scrollContainer.scrollLeft = (beatAtMouse * state.beatWidth) - (e.clientX - rect.left);
+                    updateScene(state.playheadBeat);
+                }
+            }, { passive: false });
+
+            // ZOOMING: Pinch
+            let initialPinchDist = null, initialBeatWidth = 60, initialPinchCenter = 0;
+            scrollContainer.addEventListener('touchstart', e => {
+                if (e.touches.length === 2) {
+                    initialPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                    initialBeatWidth = state.beatWidth;
+                    const rect = scrollContainer.getBoundingClientRect();
+                    initialPinchCenter = (((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left + scrollContainer.scrollLeft) / state.beatWidth;
+                }
+            }, { passive: false });
+            scrollContainer.addEventListener('touchmove', e => {
+                if (e.touches.length === 2 && initialPinchDist) {
+                    const durationBeats = (state.duration / state.fps) * (state.bpm / 60);
+                    const minBeatWidth = scrollContainer.clientWidth / Math.max(1, durationBeats);
+
+                    state.beatWidth = Math.max(minBeatWidth, Math.min(500, initialBeatWidth * (Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY) / initialPinchDist)));
+                    updateTimelineBounds();
+
+                    const rect = scrollContainer.getBoundingClientRect();
+                    scrollContainer.scrollLeft = (initialPinchCenter * state.beatWidth) - (((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left);
+                    updateScene(state.playheadBeat); e.preventDefault();
+                }
+            }, { passive: false });
+            scrollContainer.addEventListener('touchend', e => { if (e.touches.length < 2) initialPinchDist = null; });
+
+            function createTextTexture(text, font) {
+                const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 256;
+                const ctx = canvas.getContext('2d'); ctx.fillStyle = 'transparent'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ffffff'; ctx.font = `bold 120px "${font}"`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+                const tex = new THREE.CanvasTexture(canvas); tex.needsUpdate = true; return tex;
+            }
+
+            function checkCollision(clipId, layer, startBeat, duration) {
+                return state.clips.some(c => (c.id !== clipId && c.layer === layer && startBeat < c.startBeat + c.duration && startBeat + duration > c.startBeat));
+            }
+
+            function addClip(layerIndex, startBeat, durationBeats, colorStr, type, name) {
+                const id = 'clip_' + Math.random().toString(36).substr(2, 9);
+                let mesh;
+
+                if (type === 'audio' || type === 'effect') mesh = new THREE.Mesh();
+                else if (type === 'text') {
+                    mesh = new THREE.Mesh(new THREE.PlaneGeometry(4, 2), new THREE.MeshBasicMaterial({ map: createTextTexture(name, state.fonts[0]), transparent: true, opacity: 1 }));
+                } else {
+                    const geo = type === 'cube' ? new THREE.BoxGeometry(2, 2, 2) : new THREE.SphereGeometry(1.2, 32, 32);
+                    mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: parseInt(colorStr, 16) || 0xffffff, transparent: true, opacity: 1, roughness: 0.2 }));
+                }
+
+                const initialY = (type === 'cube') ? 1 : (type === 'sphere' ? 1.2 : 0);
+                mesh.position.set(0, initialY, 0); 
+                mesh.visible = true;
+                scene.add(mesh);
+
+                let defaultIn = 25;
+                let defaultOut = 25;
+
+                const clipData = {
+                    id: id, layer: layerIndex, mesh: mesh, type: type, originalColor: colorStr,
+                    startBeat: startBeat, duration: durationBeats, propIn: defaultIn, propOut: defaultOut,
+                    name: name, fontIndex: 0, effect: type === 'effect' ? name : null, effVal: 1.0,
+                    hasAction: false, useOpc: true,
+                    anim: {
+                        locX: [0, 0, 0, 0],
+                        locY: [initialY, initialY, initialY, initialY],
+                        locZ: [0, 0, 0, 0],
+                        rotX: [0, 0, 0, 0],
+                        rotY: [0, 0, 0, 0],
+                        rotZ: [0, 0, 0, 0],
+                        sclX: [1, 1, 1, 1],
+                        sclY: [1, 1, 1, 1],
+                        sclZ: [1, 1, 1, 1],
+                        rough: [0.5, 0.5, 0.5, 0.5],
+                        emit: [0, 0, 0, 0],
+                        eff: [0, 1, 1, 0],
+                        opc: [0, 1, 1, 0]
+                    }
+                };
+                state.clips.push(clipData);
+
+                const layersContainer = document.getElementById('timeline-layers-container');
+                let layerDiv = document.querySelector(`.layer[data-layer="${layerIndex}"]`);
+                if (!layerDiv) {
+                    layerDiv = document.createElement('div');
+                    layerDiv.className = 'layer'; layerDiv.dataset.layer = layerIndex;
+                    layersContainer.appendChild(layerDiv);
+                }
+
+                const item = document.createElement('div');
+                item.className = 'timeline-item'; item.id = id;
+                if (type === 'audio') item.style.backgroundColor = '#1a3322';
+                else if (type === 'effect') { item.style.backgroundColor = 'rgba(170, 0, 255, 0.3)'; item.style.borderColor = '#aa00ff'; }
+
+                item.innerHTML = `
+                    <div class="handle-edge handle-edge-left" data-handle="edge-left"></div>
+                    <div class="item-blend-zone item-in" style="width:0;"><div class="handle-fade handle-fade-in" data-handle="fade-in"></div></div>
+                    <div class="item-mid">${name}</div>
+                    <div class="item-blend-zone item-out" style="width:0;"><div class="handle-fade handle-fade-out" data-handle="fade-out"></div></div>
+                    <div class="handle-edge handle-edge-right" data-handle="edge-right"></div>
+                    <div class="handle-h handle-h-top" data-handle="h-top"></div>
+                    <div class="handle-h handle-h-bottom" data-handle="h-bottom"></div>
+                `;
+                layerDiv.appendChild(item);
+                updateClipDOM(item, clipData);
+                initClipInteraction(item, clipData);
+                updateScene(state.playheadBeat);
+                return id;
+            }
+
+            function selectClip(id) {
+                document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('selected'));
+                const el = document.getElementById(id);
+                if (el) el.classList.add('selected');
+                state.selectedClipId = id;
+
+                const clip = state.clips.find(c => c.id === id);
+                const activeToolBtn = document.querySelector('.tool-btn.active');
+                if (overlaysVisible && activeToolBtn && clip && clip.type !== 'audio' && clip.type !== 'effect') {
+                    transformControl.attach(clip.mesh); transformControl.enabled = true;
+                } else transformControl.detach();
+
+                const p = document.getElementById('panel-props');
+                if (p && p.classList.contains('active')) updatePropsPanelUI();
+            }
+
+            function updateClipDOM(item, data) {
+                // Ensure fade durations in beats are snapped to quarter beats
+                let fadeInBeats = snap(data.duration * (data.propIn / 100));
+                data.propIn = data.duration > 0 ? (fadeInBeats / data.duration) * 100 : 0;
+                let fadeOutBeats = snap(data.duration * (data.propOut / 100));
+                data.propOut = data.duration > 0 ? (fadeOutBeats / data.duration) * 100 : 0;
+
+                item.style.left = `${data.startBeat * state.beatWidth}px`;
+                item.style.width = `${data.duration * state.beatWidth}px`;
+                item.querySelector('.item-in').style.width = `${data.propIn}%`;
+                item.querySelector('.item-out').style.width = `${data.propOut}%`;
+
+                if (data.hasAction || data.effect) item.classList.add('has-action');
+                else item.classList.remove('has-action');
+                if (data.effect) item.classList.add('has-effect');
+                else item.classList.remove('has-effect');
+            }
+
+            function initClipInteraction(item, data) {
+                let activeAction = null, startX, startY, initIn, initOut, initDur, initStartBeat;
+                item.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation(); selectClip(data.id);
+                    item.setPointerCapture(e.pointerId);
+                    startX = e.clientX; startY = e.clientY; initIn = data.propIn; initOut = data.propOut; initDur = data.duration; initStartBeat = data.startBeat;
+                    if (e.target.dataset.handle) activeAction = e.target.dataset.handle;
+                    else activeAction = 'move';
+                });
+
+                item.addEventListener('pointermove', (e) => {
+                    if (!activeAction) return;
+                    const dx = e.clientX - startX; const beatsDelta = dx / state.beatWidth;
+
+                    if (activeAction === 'move') {
+                        let proposedStart = Math.max(0, snap(initStartBeat + beatsDelta));
+                        let proposedLayer = data.layer;
+                        document.querySelectorAll('.layer').forEach(l => {
+                            const rect = l.getBoundingClientRect();
+                            if (e.clientY >= rect.top && e.clientY <= rect.bottom) proposedLayer = parseInt(l.dataset.layer);
+                        });
+                        if (!checkCollision(data.id, proposedLayer, proposedStart, data.duration)) {
+                            data.startBeat = proposedStart;
+                            if (proposedLayer !== data.layer) { data.layer = proposedLayer; document.querySelector(`.layer[data-layer="${proposedLayer}"]`).appendChild(item); }
+                        }
+                    }
+                    else if (activeAction === 'edge-right') {
+                        let proposedDur = Math.max(0.5, snap(initDur + beatsDelta));
+                        if (!checkCollision(data.id, data.layer, data.startBeat, proposedDur)) data.duration = proposedDur;
+                    }
+                    else if (activeAction === 'edge-left') {
+                        let proposedStart = snap(initStartBeat + beatsDelta); let proposedDur = initDur - (proposedStart - initStartBeat);
+                        if (proposedStart >= 0 && proposedDur >= 0.5 && !checkCollision(data.id, data.layer, proposedStart, proposedDur)) { data.startBeat = proposedStart; data.duration = proposedDur; }
+                    }
+                    else if (activeAction === 'fade-in') {
+                        let newFade = Math.max(0, Math.min(snap(initDur * (initIn / 100) + beatsDelta), data.duration - (initDur * initOut / 100)));
+                        data.propIn = (newFade / data.duration) * 100;
+                    }
+                    else if (activeAction === 'fade-out') {
+                        let newFade = Math.max(0, Math.min(snap(initDur * (initOut / 100) - beatsDelta), data.duration - (initDur * initIn / 100)));
+                        data.propOut = (newFade / data.duration) * 100;
+                    }
+                    else if (activeAction === 'h-top') {
+                        const dy = e.clientY - startY;
+                        let currentFadeBeats = data.duration * (initIn / 100);
+                        let beatsDelta = (dy / 60); 
+                        let newFadeBeats = Math.max(0, Math.min(snap(currentFadeBeats + beatsDelta), data.duration / 2));
+                        data.propIn = (newFadeBeats / data.duration) * 100;
+                        data.propOut = data.propIn;
+                    }
+                    else if (activeAction === 'h-bottom') {
+                        const dy = e.clientY - startY;
+                        let addedBeats = snap((dy / 20) * 0.5); 
+                        let newDur = initDur + (addedBeats * 2);
+                        if (newDur >= 0.5) {
+                            let proposedStart = initStartBeat - addedBeats;
+                            if (proposedStart >= 0) {
+                                if (!checkCollision(data.id, data.layer, proposedStart, newDur)) { data.duration = newDur; data.startBeat = proposedStart; }
+                            } else if (!checkCollision(data.id, data.layer, 0, initDur + initStartBeat * 2)) {
+                                data.startBeat = 0; data.duration = initDur + initStartBeat * 2;
+                            }
+                        }
+                    }
+                    updateClipDOM(item, data); updateScene(state.playheadBeat);
+                });
+                item.addEventListener('pointerup', (e) => {
+                    activeAction = null;
+                    if(item.hasPointerCapture(e.pointerId)) item.releasePointerCapture(e.pointerId);
+                });
+                item.addEventListener('pointercancel', (e) => {
+                    activeAction = null;
+                    if(item.hasPointerCapture(e.pointerId)) item.releasePointerCapture(e.pointerId);
+                });
+            }
+
+            let isPanning = false, panStartX, panStartY, startScrollX, startScrollY;
+            scrollContainer.addEventListener('pointerdown', (e) => {
+                // Ensure panning only triggers for mouse, letting touch devices scroll natively
+                if (e.pointerType === 'mouse' && (e.target.id === 'timeline-tracks-container' || e.target.id === 'timeline-bg-grid' || e.target.classList.contains('layer'))) {
+                    isPanning = true; panStartX = e.clientX; panStartY = e.clientY;
+                    startScrollX = scrollContainer.scrollLeft; startScrollY = scrollContainer.scrollTop;
+                    scrollContainer.classList.add('grabbing');
+                }
+            });
+            window.addEventListener('pointermove', (e) => {
+                if (isPanning && !initialPinchDist) { scrollContainer.scrollLeft = startScrollX - (e.clientX - panStartX); scrollContainer.scrollTop = startScrollY - (e.clientY - panStartY); }
+            });
+            window.addEventListener('pointerup', () => { isPanning = false; scrollContainer.classList.remove('grabbing'); });
+
+            // PROPERTIES UI: 4x Matrix
+            function updatePropsPanelUI() {
+                const clip = state.clips.find(c => c.id === state.selectedClipId);
+                const delBtn = document.getElementById('btn-delete-clip');
+
+                if (!clip) {
+                    document.getElementById('props-placeholder').style.display = 'block';
+                    document.getElementById('props-content').style.display = 'none';
+                    delBtn.style.display = 'none';
+                    return;
+                }
+
+                document.getElementById('props-placeholder').style.display = 'none';
+                document.getElementById('props-content').style.display = 'flex';
+                delBtn.style.display = 'flex';
+
+                const isVisual = clip.type !== 'audio' && clip.type !== 'effect';
+                
+                const chkOpc = document.getElementById('chk-use-opc');
+                if (chkOpc) {
+                    chkOpc.checked = clip.useOpc;
+                    chkOpc.onchange = (e) => { clip.useOpc = e.target.checked; updateScene(state.playheadBeat); };
+                }
+
+                document.querySelectorAll('.tr-basic-group').forEach(el => {
+                    if (!isVisual) el.style.display = 'none';
+                    else el.style.display = el.classList.contains('action-grid') ? 'grid' : 'block';
+                });
+
+                document.querySelectorAll('.tr-group').forEach(el => {
+                    if (!isVisual) el.style.display = 'none';
+                    else el.style.display = el.classList.contains('action-grid') ? 'grid' : 'flex';
+                });
+
+                document.querySelectorAll('.tr-action-group').forEach(el => {
+                    if (!(isVisual && clip.hasAction)) el.style.display = 'none';
+                    else el.style.display = el.classList.contains('action-grid') ? 'grid' : 'block';
+                });
+
+                if (isVisual) {
+                    const populateRoller = (elId, val, step) => {
+                        const el = document.getElementById(elId);
+                        if (!el) return;
+                        const v = parseFloat(val);
+                        el.innerHTML = `
+                            <span class="roller-dim">${(v - step).toFixed(2)}</span>
+                            <span class="roller-active">${v.toFixed(2)}</span>
+                            <span class="roller-dim">${(v + step).toFixed(2)}</span>
+                        `;
+                    };
+
+                    const stepTr = 0.1;
+                    const stepEff = 0.05;
+
+                    populateRoller('bas-locX', clip.anim.locX[0], stepTr);
+                    populateRoller('bas-locY', clip.anim.locY[0], stepTr);
+                    populateRoller('bas-locZ', clip.anim.locZ[0], stepTr);
+                    populateRoller('bas-rotX', clip.anim.rotX[0], stepTr);
+                    populateRoller('bas-rotY', clip.anim.rotY[0], stepTr);
+                    populateRoller('bas-rotZ', clip.anim.rotZ[0], stepTr);
+                    populateRoller('bas-sclX', clip.anim.sclX[0], stepTr);
+                    populateRoller('bas-sclY', clip.anim.sclY[0], stepTr);
+                    populateRoller('bas-sclZ', clip.anim.sclZ[0], stepTr);
+                    populateRoller('bas-rough', clip.anim.rough[0], stepEff);
+                    populateRoller('bas-emit', clip.anim.emit[0], stepEff);
+
+                    for (let i = 0; i < 4; i++) {
+                        populateRoller(`ag-opc-${i}`, clip.anim.opc[i], stepEff);
+                    }
+
+                    if (clip.hasAction) {
+                        ['locX', 'locY', 'locZ', 'rotX', 'rotY', 'rotZ', 'sclX', 'sclY', 'sclZ'].forEach(arr => {
+                            for (let i = 0; i < 4; i++) {
+                                populateRoller(`ag-${arr}-${i}`, clip.anim[arr][i], stepTr);
+                            }
+                        });
+                    }
+                }
+
+                const showEff = clip.effect != null;
+                document.querySelectorAll('.eff-group').forEach(el => el.style.display = showEff ? 'block' : 'none');
+                if (showEff) {
+                    document.getElementById('ag-lbl-eff').innerText = clip.effect.substring(0, 3).toUpperCase();
+                    for (let i = 0; i < 4; i++) populateRoller(`ag-eff-${i}`, clip.anim.eff[i], stepEff);
+                }
+
+                if (clip.type === 'text') {
+                    document.getElementById('prop-font').style.display = 'flex'; document.getElementById('prop-mat').style.display = 'none';
+                    document.getElementById('f-top').innerText = state.fonts[Math.max(0, clip.fontIndex - 1)] || '';
+                    document.getElementById('f-mid').innerText = state.fonts[clip.fontIndex];
+                    document.getElementById('f-bot').innerText = state.fonts[Math.min(state.fonts.length - 1, clip.fontIndex + 1)] || '';
+                } else if (clip.type === 'audio' || clip.type === 'effect') {
+                    document.getElementById('prop-font').style.display = 'none'; document.getElementById('prop-mat').style.display = 'none';
+                    document.querySelectorAll('.mat-group').forEach(el => el.style.display = 'none');
+                } else {
+                    document.getElementById('prop-font').style.display = 'none'; document.getElementById('prop-mat').style.display = 'flex';
+                    document.querySelectorAll('.mat-group').forEach(el => el.style.display = 'block');
+                    
+                    document.querySelectorAll('.mat-swatch').forEach(sw => {
+                        const sColor = sw.dataset.color.toLowerCase().replace('0x', '#');
+                        const mColor = '#' + clip.mesh.material.color.getHexString().toLowerCase();
+                        if (sColor === mColor) sw.classList.add('active');
+                        else sw.classList.remove('active');
+                    });
+                }
+            }
+
+            // Action Matrix Cells Drag Logic
+            document.querySelectorAll('.ag-cell').forEach(cell => {
+                let isDrag = false, startX = 0, exactVal = 0;
+                cell.addEventListener('pointerdown', e => {
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if (!clip || !cell.id || !cell.dataset.arr) return;
+                    isDrag = true; startX = e.clientX;
+                    exactVal = clip.anim[cell.dataset.arr][parseInt(cell.dataset.idx)];
+                    cell.setPointerCapture(e.pointerId);
+                });
+                cell.addEventListener('pointermove', e => {
+                    if (!isDrag) return;
+                    const step = (cell.dataset.arr === 'sclX' || cell.dataset.arr === 'sclY' || cell.dataset.arr === 'sclZ' || cell.dataset.arr === 'eff' || cell.dataset.arr === 'opc' || cell.dataset.arr === 'rough' || cell.dataset.arr === 'emit') ? 0.05 : 0.1;
+                    exactVal += (e.clientX - startX) * step; startX = e.clientX;
+                    if (cell.dataset.arr === 'eff' || cell.dataset.arr === 'opc') exactVal = Math.max(0, Math.min(2, exactVal)); // clamp
+
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if(cell.id.startsWith('bas-')) {
+                        for(let i=0; i<4; i++) clip.anim[cell.dataset.arr][i] = exactVal;
+                        const stepVal = step;
+                        const v = exactVal;
+                        cell.innerHTML = `<span class="roller-dim">${(v - stepVal).toFixed(2)}</span><span class="roller-active">${v.toFixed(2)}</span><span class="roller-dim">${(v + stepVal).toFixed(2)}</span>`;
+                    } else {
+                        clip.anim[cell.dataset.arr][parseInt(cell.dataset.idx)] = exactVal;
+                        const stepVal = step;
+                        const v = exactVal;
+                        cell.innerHTML = `<span class="roller-dim">${(v - stepVal).toFixed(2)}</span><span class="roller-active">${v.toFixed(2)}</span><span class="roller-dim">${(v + stepVal).toFixed(2)}</span>`;
+                    }
+
+                    updateScene(state.playheadBeat);
+                });
+                cell.addEventListener('pointerup', () => isDrag = false);
+            });
+
+            const fontRoller = document.getElementById('prop-font');
+            let fDrag = false, fStartY, fExact = 0;
+            fontRoller.addEventListener('pointerdown', e => {
+                const clip = state.clips.find(c => c.id === state.selectedClipId); if (!clip || clip.type !== 'text') return;
+                fDrag = true; fStartY = e.clientY; fExact = clip.fontIndex; fontRoller.setPointerCapture(e.pointerId);
+            });
+            fontRoller.addEventListener('pointermove', e => {
+                if (!fDrag) return;
+                fExact -= (e.clientY - fStartY) * 0.05; fStartY = e.clientY;
+                const clip = state.clips.find(c => c.id === state.selectedClipId);
+                const newIdx = Math.max(0, Math.min(state.fonts.length - 1, Math.round(fExact)));
+                if (clip.fontIndex !== newIdx) { clip.fontIndex = newIdx; clip.mesh.material.map = createTextTexture(clip.name, state.fonts[newIdx]); updatePropsPanelUI(); updateScene(state.playheadBeat); }
+            });
+            fontRoller.addEventListener('pointerup', () => fDrag = false);
+
+            document.querySelectorAll('.mat-swatch').forEach(sw => {
+                sw.addEventListener('click', () => {
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if (clip && clip.type !== 'text' && clip.type !== 'audio' && clip.type !== 'effect') {
+                        clip.mesh.material.color.setHex(parseInt(sw.dataset.color, 16));
+                        document.getElementById(clip.id).style.borderColor = sw.style.backgroundColor;
+                        
+                        document.querySelectorAll('.mat-swatch').forEach(s => s.classList.remove('active'));
+                        sw.classList.add('active');
+                        
+                        updateScene(state.playheadBeat);
+                    }
+                });
+            });
+
+            document.getElementById('btn-delete-clip').addEventListener('click', () => {
+                if (!state.selectedClipId) return;
+                const idx = state.clips.findIndex(c => c.id === state.selectedClipId);
+                if (idx > -1) {
+                    const clip = state.clips[idx]; transformControl.detach(); scene.remove(clip.mesh); document.getElementById(clip.id).remove();
+                    state.clips.splice(idx, 1); state.selectedClipId = null; updatePropsPanelUI(); updateScene(state.playheadBeat);
+                }
+            });
+
+            document.querySelectorAll('.btn-close-panel').forEach(btn => {
+                btn.addEventListener('click', () => document.querySelector('.tab-btn[data-target="timeline"]').click());
+            });
+
+            // Drag Assets & Effects & Actions
+            function initDrag(selector, dType) {
+                document.querySelectorAll(selector).forEach(btn => {
+                    let isDragging = false, startX, startY, ghost = null, data = null;
+                    const move = (ev) => {
+                        if (!isDragging && (Math.abs(ev.clientX - startX) > 5 || Math.abs(ev.clientY - startY) > 5)) {
+                            isDragging = true;
+                            data = (dType === 'effect' || dType === 'action')
+                                ? { type: dType, color: '0xaa00ff', name: btn.innerText, dur: 2 }
+                                : { type: btn.dataset.type, color: btn.dataset.color, name: btn.innerText, dur: parseFloat(btn.dataset.duration || 2) };
+
+                            ghost = btn.cloneNode(true);
+                            ghost.style.cssText = `position:fixed; pointer-events:none; z-index:9999; opacity:0.8; width:${btn.offsetWidth}px; height:${btn.offsetHeight}px; background:${btn.style.backgroundColor || '#222'}; border:1px solid ${btn.style.borderColor || '#555'}; color:${btn.style.color || '#fff'}; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; border-radius:8px;`;
+                            ghost.innerText = btn.innerText;
+                            document.body.appendChild(ghost);
+                            document.getElementById('panels-container').classList.remove('open');
+                        }
+                        if (isDragging && ghost) { ev.preventDefault(); ghost.style.left = ev.clientX - ghost.offsetWidth / 2 + 'px'; ghost.style.top = ev.clientY - ghost.offsetHeight / 2 + 'px'; }
+                    };
+                    const up = (ev) => {
+                        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+                        if (isDragging && ghost) {
+                            ghost.style.display = 'none';
+                            const tlItem = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.timeline-item');
+
+                            if ((dType === 'effect' || dType === 'action') && tlItem) {
+                                const clip = state.clips.find(c => c.id === tlItem.id);
+                                if (clip && clip.type !== 'audio' && clip.type !== 'effect') {
+                                    if (dType === 'action') {
+                                        clip.hasAction = true;
+                                        const cX = clip.anim.locX[0];
+                                        if (data.name === 'Slide') { clip.anim.locX = [cX - 5, cX, cX, cX + 5]; }
+                                        else if (data.name === 'Spin') { clip.anim.rotZ = [-3.14, 0, 0, 3.14]; }
+                                        else { clip.anim.scl = [0, 1.2, 1, 0]; }
+                                        clip.propIn = 25; clip.propOut = 25;
+                                        updateClipDOM(document.getElementById(clip.id), clip);
+                                    } else {
+                                        clip.effect = data.name;
+                                        clip.anim.eff = [0, 1.0, 1.0, 0];
+                                        clip.propIn = 25; clip.propOut = 25;
+                                        tlItem.querySelector('.item-mid').innerText = `${clip.name} [${data.name}]`;
+                                        updateClipDOM(document.getElementById(clip.id), clip);
+                                    }
+                                    if (state.selectedClipId === clip.id) updatePropsPanelUI();
+                                    updateScene(state.playheadBeat);
+                                }
+                            } else if (dType !== 'action') {
+                                const scrollRect = document.getElementById('timeline-scroll').getBoundingClientRect();
+                                const tracksRect = document.getElementById('timeline-tracks-container').getBoundingClientRect();
+
+                                if (ev.clientX >= scrollRect.left && ev.clientX <= scrollRect.right && ev.clientY >= scrollRect.top && ev.clientY <= scrollRect.bottom) {
+                                    let dropBeat = Math.max(0, snap((ev.clientX - tracksRect.left + scrollContainer.scrollLeft) / state.beatWidth));
+                                    let layer = 1;
+                                    document.querySelectorAll('.layer').forEach(l => {
+                                        const lRect = l.getBoundingClientRect();
+                                        if (ev.clientY >= lRect.top && ev.clientY <= lRect.bottom) layer = parseInt(l.dataset.layer);
+                                    });
+                                    if (!checkCollision('new', layer, dropBeat, data.dur)) {
+                                        const newId = addClip(layer, dropBeat, data.dur, data.color, data.type, data.name);
+                                        selectClip(newId);
+                                    }
+                                }
+                            }
+                            document.body.removeChild(ghost);
+                        } else if (!isDragging && dType !== 'effect' && dType !== 'action') {
+                            let targetStart = snap(state.playheadBeat);
+                            if (!checkCollision('new', 1, targetStart, data ? data.dur : parseFloat(btn.dataset.duration || 2))) {
+                                addClip(1, targetStart, data ? data.dur : parseFloat(btn.dataset.duration || 2), btn.dataset.color, btn.dataset.type, btn.innerText);
+                                document.querySelector('.tab-btn[data-target="timeline"]').click();
+                            }
+                        }
+                    };
+                    btn.addEventListener('pointerdown', (e) => {
+                        startX = e.clientX; startY = e.clientY; isDragging = false;
+                        window.addEventListener('pointermove', move, { passive: false });
+                        window.addEventListener('pointerup', up);
+                    });
+                });
+            }
+            initDrag('.asset-item:not(.effect-item):not(.action-item)', 'asset');
+            initDrag('.effect-item', 'effect'); initDrag('.action-item', 'action');
+
+            // --- 4. Render & Evaluation ---
+            const playBtnCircle = document.getElementById('play-btn-circle');
+            let lastTime = 0, audioCtx = null;
+
+            playBtnCircle.addEventListener('click', () => {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                state.isPlaying = !state.isPlaying;
+                document.getElementById('icon-play').style.display = state.isPlaying ? 'none' : 'block';
+                document.getElementById('icon-pause').style.display = state.isPlaying ? 'block' : 'none';
+                if (state.isPlaying) lastTime = performance.now();
+            });
+
+            function playDrumSynth(type, time) {
+                if (!audioCtx) return;
+                const gain = audioCtx.createGain(); gain.connect(audioCtx.destination);
+                if (type === 'kick') {
+                    const osc = audioCtx.createOscillator(); osc.type = 'sine';
+                    osc.frequency.setValueAtTime(150, time); osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+                    gain.gain.setValueAtTime(1, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+                    osc.connect(gain); osc.start(time); osc.stop(time + 0.5);
+                }
+                else if (type === 'snare') {
+                    const bufferSize = audioCtx.sampleRate * 0.2; const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                    const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 1000;
+                    noise.connect(filter); filter.connect(gain);
+                    gain.gain.setValueAtTime(1, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+                    noise.start(time); noise.stop(time + 0.2);
+                    const osc = audioCtx.createOscillator(); osc.type = 'triangle'; osc.frequency.setValueAtTime(250, time);
+                    const oscGain = audioCtx.createGain(); oscGain.gain.setValueAtTime(0.5, time); oscGain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+                    osc.connect(oscGain); oscGain.connect(audioCtx.destination); osc.start(time); osc.stop(time + 0.1);
+                }
+                else if (type === 'hihat') {
+                    const bufferSize = audioCtx.sampleRate * 0.1; const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                    const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 5000;
+                    noise.connect(filter); filter.connect(gain);
+                    gain.gain.setValueAtTime(0.5, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+                    noise.start(time); noise.stop(time + 0.05);
+                }
+                else if (type === 'bass') {
+                    const osc = audioCtx.createOscillator(); osc.type = 'sawtooth';
+                    const freq = [55, 65, 73, 55][Math.floor(time * 2) % 4] || 55;
+                    osc.frequency.setValueAtTime(freq, time);
+                    gain.gain.setValueAtTime(0.4, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+                    osc.connect(gain); osc.start(time); osc.stop(time + 0.2);
+                }
+            }
+
+            const lerp = (a, b, p) => a + (b - a) * p;
+
+            function updateScene(currentBeat) {
+                const playheadEl = document.getElementById('playhead');
+                playheadEl.style.transform = `translateX(${currentBeat * state.beatWidth}px)`;
+
+                const sec = (currentBeat * 60) / state.bpm;
+                const currentFrame = Math.round(sec * state.fps) + 1;
+
+                const spansCont = document.getElementById('fr-dynamic-spans');
+                let spansHTML = '';
+                for (let i = 1; i <= 30; i++) {
+                    if (state.format === 0) spansHTML += `<span class="fr-val">${currentFrame + i}</span>`;
+                    else spansHTML += `<span class="fr-val">${(sec + (1 / state.fps) * i).toFixed(1)}s</span>`;
+                }
+                spansCont.innerHTML = spansHTML;
+
+                if (state.format === 0) document.getElementById('fr-active').innerText = currentFrame;
+                else document.getElementById('fr-active').innerText = sec.toFixed(2) + 's';
+
+                let activeGlobalEffect = null;
+                let activeLocalEffectBox = null;
+                let activeLocalEffectType = 0;
+                let activeLocalEffectInt = 0;
+
+                state.clips.forEach(clip => {
+                    const localBeat = currentBeat - clip.startBeat;
+                    let isVisible = (localBeat >= 0 && localBeat <= clip.duration);
+
+                    if (clip.type === 'effect') { if (isVisible) activeGlobalEffect = clip; return; }
+                    if (clip.type === 'audio') return;
+
+                    clip.mesh.visible = isVisible;
+
+                    if (isVisible) {
+                        const inDur = clip.duration * (clip.propIn / 100);
+                        const outDur = clip.duration * (clip.propOut / 100);
+
+                        let progress = 0; let vIdx = 0;
+                        let t2 = inDur; let t3 = clip.duration - outDur;
+                        if (localBeat <= t2) { progress = (t2 > 0) ? localBeat / t2 : 1; vIdx = 0; }
+                        else if (localBeat <= t3) { progress = (t3 > t2) ? (localBeat - t2) / (t3 - t2) : 1; vIdx = 1; }
+                        else { progress = (clip.duration > t3) ? (localBeat - t3) / (clip.duration - t3) : 1; vIdx = 2; }
+
+                        // ANIMATION EVALUATION (Transforms)
+                        let aLocX = lerp(clip.anim.locX[vIdx], clip.anim.locX[vIdx + 1], progress);
+                        let aLocY = lerp(clip.anim.locY[vIdx], clip.anim.locY[vIdx + 1], progress);
+                        let aLocZ = lerp(clip.anim.locZ[vIdx], clip.anim.locZ[vIdx + 1], progress);
+                        let aRotX = lerp(clip.anim.rotX[vIdx], clip.anim.rotX[vIdx + 1], progress);
+                        let aRotY = lerp(clip.anim.rotY[vIdx], clip.anim.rotY[vIdx + 1], progress);
+                        let aRotZ = lerp(clip.anim.rotZ[vIdx], clip.anim.rotZ[vIdx + 1], progress);
+                        let aSclX = lerp(clip.anim.sclX[vIdx], clip.anim.sclX[vIdx + 1], progress);
+                        let aSclY = lerp(clip.anim.sclY[vIdx], clip.anim.sclY[vIdx + 1], progress);
+                        let aSclZ = lerp(clip.anim.sclZ[vIdx], clip.anim.sclZ[vIdx + 1], progress);
+
+                        if (!transformControl.dragging || transformControl.object !== clip.mesh) {
+                            clip.mesh.position.set(aLocX, aLocY, aLocZ);
+                            clip.mesh.rotation.set(aRotX, aRotY, aRotZ);
+                            clip.mesh.scale.set(aSclX, aSclY, aSclZ);
+                        }
+
+                        // OPACITY EVALUATION
+                        let opacity = clip.anim.opc[vIdx];
+                        if (clip.useOpc) {
+                            opacity = lerp(clip.anim.opc[vIdx], clip.anim.opc[vIdx + 1], progress);
+                        } else {
+                            if (inDur === 0 && outDur === 0) opacity = 1;
+                            else if (inDur > 0 && localBeat < inDur) opacity = localBeat / inDur;
+                            else if (outDur > 0 && localBeat > clip.duration - outDur) opacity = (clip.duration - localBeat) / outDur;
+                        }
+                        
+                        clip.mesh.material.opacity = Math.max(0, Math.min(1, opacity));
+                        clip.mesh.material.transparent = clip.mesh.material.opacity < 1.0;
+                        clip.mesh.material.needsUpdate = true;
+                        
+                        // MATERIAL PROPERTIES
+                        if (clip.mesh.material.type === 'MeshStandardMaterial') {
+                            clip.mesh.material.roughness = lerp(clip.anim.rough[vIdx], clip.anim.rough[vIdx + 1], progress);
+                            const emInt = lerp(clip.anim.emit[vIdx], clip.anim.emit[vIdx + 1], progress);
+                            clip.mesh.material.emissiveIntensity = emInt;
+                            if (emInt > 0) clip.mesh.material.emissive.copy(clip.mesh.material.color);
+                            else clip.mesh.material.emissive.set(0x000000);
+                        }
+
+                        // LOCAL EFFECTS MASKING
+                        if (clip.effect) {
+                            activeLocalEffectInt = lerp(clip.anim.eff[vIdx], clip.anim.eff[vIdx + 1], progress);
+                            activeLocalEffectType = clip.effect === 'Glitch' ? 1 : (clip.effect === 'Lens' ? 2 : 3);
+
+                            const box = new THREE.Box3().setFromObject(clip.mesh);
+                            const min = box.min; const max = box.max;
+                            const corners = [
+                                new THREE.Vector3(min.x, min.y, min.z), new THREE.Vector3(max.x, min.y, min.z),
+                                new THREE.Vector3(min.x, max.y, min.z), new THREE.Vector3(max.x, max.y, min.z),
+                                new THREE.Vector3(min.x, min.y, max.z), new THREE.Vector3(max.x, min.y, max.z),
+                                new THREE.Vector3(min.x, max.y, max.z), new THREE.Vector3(max.x, max.y, max.z)
+                            ];
+                            let minU = 1, maxU = 0, minV = 1, maxV = 0;
+                            corners.forEach(c => {
+                                c.project(camera);
+                                let u = (c.x + 1) / 2; let v = (c.y + 1) / 2;
+                                if (u < minU) minU = u; if (u > maxU) maxU = u;
+                                if (v < minV) minV = v; if (v > maxV) maxV = v;
+                            });
+                            minU -= 0.05; maxU += 0.05; minV -= 0.05; maxV += 0.05;
+                            activeLocalEffectBox = { min: new THREE.Vector2(minU, minV), max: new THREE.Vector2(maxU, maxV) };
+                        }
+                    }
+                });
+
+                if (activeLocalEffectBox) {
+                    screenPass.uniforms.lBoxMin.value.copy(activeLocalEffectBox.min);
+                    screenPass.uniforms.lBoxMax.value.copy(activeLocalEffectBox.max);
+                    screenPass.uniforms.lEffInt.value = activeLocalEffectInt;
+                    screenPass.uniforms.lEffType.value = activeLocalEffectType;
+                } else screenPass.uniforms.lEffInt.value = 0;
+
+                if (activeGlobalEffect) {
+                    let progress = 0; let vIdx = 0;
+                    const inDur = activeGlobalEffect.duration * (activeGlobalEffect.propIn / 100);
+                    const outDur = activeGlobalEffect.duration * (activeGlobalEffect.propOut / 100);
+                    const localBeat = currentBeat - activeGlobalEffect.startBeat;
+
+                    let t2 = inDur; let t3 = activeGlobalEffect.duration - outDur;
+                    if (localBeat <= t2) { progress = (t2 > 0) ? localBeat / t2 : 1; vIdx = 0; }
+                    else if (localBeat <= t3) { progress = (t3 > t2) ? (localBeat - t2) / (t3 - t2) : 1; vIdx = 1; }
+                    else { progress = (activeGlobalEffect.duration > t3) ? (localBeat - t3) / (activeGlobalEffect.duration - t3) : 1; vIdx = 2; }
+
+                    let eVal = lerp(activeGlobalEffect.anim.eff[vIdx], activeGlobalEffect.anim.eff[vIdx + 1], progress);
+                    screenPass.uniforms.gEffInt.value = eVal;
+                    screenPass.uniforms.gEffType.value = activeGlobalEffect.name === 'Glitch' ? 1 : (activeGlobalEffect.name === 'Lens' ? 2 : 3);
+                } else screenPass.uniforms.gEffInt.value = 0.0;
+            }
+
+            let lastIntBeat = -1;
+            function animate() {
+                requestAnimationFrame(animate);
+                orbitControls.update();
+
+                if (state.isPlaying) {
+                    const now = performance.now(); const deltaSec = (now - lastTime) / 1000; lastTime = now;
+                    state.playheadBeat += deltaSec * (state.bpm / 60);
+
+                    const playheadX = state.playheadBeat * state.beatWidth;
+                    const viewWidth = scrollContainer.clientWidth;
+
+                    if (playheadX > scrollContainer.scrollLeft + viewWidth * 0.5) scrollContainer.scrollLeft = playheadX - viewWidth * 0.5;
+                    else if (playheadX < scrollContainer.scrollLeft) scrollContainer.scrollLeft = Math.max(0, playheadX - viewWidth * 0.1);
+
+                    const currentIntBeat = Math.floor(state.playheadBeat);
+                    if (audioCtx && currentIntBeat !== lastIntBeat) {
+                        lastIntBeat = currentIntBeat;
+                        let audioPlayed = false;
+
+                        state.clips.forEach(clip => {
+                            if (clip.type === 'audio') {
+                                const localBeat = currentIntBeat - Math.floor(clip.startBeat);
+                                if (localBeat >= 0 && localBeat < clip.duration) {
+                                    if (clip.name.includes('Drum')) playDrumSynth(['kick', 'hihat', 'snare', 'hihat'][localBeat % 4], audioCtx.currentTime);
+                                    else if (clip.name.includes('Bass')) playDrumSynth('bass', audioCtx.currentTime);
+                                    else if (clip.name.includes('Ambient')) playDrumSynth('ambient', audioCtx.currentTime);
+                                    audioPlayed = true;
+                                }
+                            }
+                        });
+
+                        const osc = audioCtx.createOscillator(); const env = audioCtx.createGain();
+                        osc.frequency.value = (currentIntBeat % 4 === 0) ? 880 : 440;
+                        env.gain.setValueAtTime(audioPlayed ? 0.02 : 0.1, audioCtx.currentTime);
+                        env.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                        osc.connect(env); env.connect(audioCtx.destination);
+                        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+                    }
+
+                    const maxBeat = (state.duration / state.fps) * (state.bpm / 60);
+                    if (state.playheadBeat >= maxBeat) { state.playheadBeat = 0; lastIntBeat = -1; scrollContainer.scrollLeft = 0; }
+                }
+
+                updateScene(state.playheadBeat);
+                renderer.autoClear = false;
+                composer.render();
+                viewHelper.render(renderer);
+            }
+
+            // Initialization
+            for (let i = 1; i <= 6; i++) {
+                const layer = document.createElement('div');
+                layer.className = 'layer'; layer.dataset.layer = i;
+                document.getElementById('timeline-layers-container').appendChild(layer);
+            }
+            updateToolbarUI();
+            animate();
+
+            document.querySelectorAll('.tab-btn').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    const target = tab.dataset.target;
+                    const panelsCont = document.getElementById('panels-container');
+                    if (target === 'timeline') panelsCont.classList.remove('open');
+                    else {
+                        panelsCont.classList.add('open');
+                        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                        document.getElementById(`panel-${target}`)?.classList.add('active');
+                        if (target === 'props') updatePropsPanelUI();
+                    }
+                });
+            });
+
+            // Project Management
+            document.getElementById('btn-save-proj').addEventListener('click', () => {
+                const projectData = {
+                    bpm: state.bpm, fps: state.fps, duration: state.duration,
+                    clips: state.clips.map(c => {
+                        const { mesh, ...rest } = c;
+                        return rest;
+                    })
+                };
+                const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `project_${new Date().getTime()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+            document.getElementById('btn-open-proj').addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        const data = JSON.parse(e.target.result);
+                        // Clear current
+                        state.clips.forEach(c => { if(c.mesh) scene.remove(c.mesh); });
+                        state.clips = [];
+                        document.getElementById('timeline-layers-container').querySelectorAll('.timeline-item').forEach(el => el.remove());
+
+                        // Load new
+                        state.bpm = data.bpm || 120;
+                        state.fps = data.fps || 30;
+                        state.duration = data.duration || 300;
+                        
+                        data.clips.forEach(cData => {
+                            const clip = addClip(cData.layer, cData.startBeat, cData.duration, cData.originalColor, cData.type, cData.name);
+                            Object.assign(clip, cData); // Restore properties
+                            // Re-apply to mesh since addClip created a fresh one
+                            if (clip.mesh) {
+                                if (clip.type === 'text') clip.mesh.material.map = createTextTexture(clip.name, state.fonts[clip.fontIndex]);
+                                else if (clip.mesh.material.color) clip.mesh.material.color.setHex(parseInt(clip.originalColor, 16));
+                            }
+                        });
+                        updateToolbarUI();
+                        updateScene(0);
+                    };
+                    reader.readAsText(file);
+                };
+                input.click();
+            });
+
+            // PWA Install Prompt
+            let deferredPrompt;
+            const btnPwa = document.getElementById('btn-pwa-install');
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                btnPwa.style.display = 'flex';
+            });
+
+            btnPwa.addEventListener('click', async () => {
+                if (!deferredPrompt) return;
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    btnPwa.style.display = 'none';
+                    deferredPrompt = null;
+                }
+            });
+
+            window.addEventListener('appinstalled', () => {
+                btnPwa.style.display = 'none';
+                deferredPrompt = null;
+                console.log('PWA installed successfully');
+            });
+
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW reg failed', err));
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>
