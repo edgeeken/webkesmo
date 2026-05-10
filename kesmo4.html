@@ -1,0 +1,2786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Web.Kesmo - Lite</title>
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icon.svg">
+
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.156.1/examples/jsm/"
+        }
+    }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-main: #000000;
+            --bg-viewport: #0a0a0a;
+            --bg-panel: #0a0a0a;
+            --bg-toolbar: #151515;
+            --border: #222222;
+            --accent: #2F69FF;
+            --text-main: #ffffff;
+            --text-muted: #555555;
+            --item-bg: #1e1e1e;
+            --ios-safe-bottom: env(safe-area-inset-bottom);
+            
+            --timeline-height: calc(60vh - 60px);
+            --splitter-height: 12px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Inter', -apple-system, sans-serif; }
+
+        body { background-color: var(--bg-main); color: var(--text-main); font-size: 11px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; touch-action: none; }
+
+        #app {
+            display: flex; flex-direction: column; height: 100%; position: relative; overflow: hidden;
+            padding-bottom: calc(60px + var(--ios-safe-bottom));
+        }
+
+        /* === VIEWPORT === */
+        #viewport {
+            flex: 1; min-height: 120px; background-color: var(--bg-viewport); position: relative; overflow: hidden; touch-action: none;
+            z-index: 100;
+        }
+        #viewport canvas { display: block; width: 100% !important; height: 100% !important; }
+        #safe-area { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.25); pointer-events: none; z-index: 5; display: none; }
+
+        .ar-selector { position: absolute; top: 78px; left: 12px; display: flex; flex-direction: column; gap: 8px; z-index: 10; }
+        .ar-roller { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; width: 68px; display: flex; flex-direction: column; align-items: stretch; overflow: hidden; padding: 6px 0; cursor: ns-resize; touch-action: none; }
+        .ar-roller .ar-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .ar-roller .ar-icon { width: 16px; height: 16px; fill: rgba(255, 255, 255, 0.5); margin-bottom: 6px; pointer-events: none; }
+        .ar-roller .ar-prev, .ar-roller .ar-next { font-size: 9px; color: #555; pointer-events: none; }
+        .ar-roller .ar-value { font-size: 13px; font-weight: bold; color: #fff; pointer-events: none; margin: 2px 0; }
+        
+        .cam-btns-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; width: 68px; }
+        .cam-sq-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: #ccc; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; aspect-ratio: 1; }
+        .cam-sq-btn:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--accent); color: #fff; }
+        .cam-sq-btn.active { background: rgba(255, 0, 85, 0.2); border-color: #ff0055; color: #ff0055; }
+        .cam-sq-btn svg { width: 14px; height: 14px; fill: currentColor; }
+
+        .vp-tools { position: absolute; top: 15px; right: 15px; display: flex; flex-direction: column; gap: 5px; z-index: 10; align-items: flex-end; }
+        .eye-btn { width: 32px; height: 32px; margin-bottom: 5px; color: #fff; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); transition: 0.2s; }
+        .eye-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .eye-btn.disabled { opacity: 0.5; color: #777; }
+        .tool-btn { background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; color: #aaa; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; backdrop-filter: blur(4px); width: 32px; height: 32px; padding: 0; }
+        .tool-btn svg { width: 18px; height: 18px; fill: currentColor; }
+        .tool-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        #view-gizmo { position: absolute; bottom: 12px; right: 12px; width: 56px; height: 56px; z-index: 1000; pointer-events: auto; perspective: 200px; transform-style: preserve-3d; cursor: grab; transform: scaleY(-1); }
+        #view-gizmo .gz-cube { position: absolute; inset: 50% 50% auto auto; width: 38px; height: 38px; transform-style: preserve-3d; transform: translate(50%, -50%); }
+        #view-gizmo .gz-cube .gz-face { position: absolute; inset: 0; border: 1px solid rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.6); cursor: pointer; backface-visibility: hidden; box-shadow: inset 0 0 12px rgba(0,0,0,0.25); transition: filter 0.15s; }
+        #view-gizmo .gz-cube .gz-face:hover { filter: brightness(1.25); }
+        #view-gizmo .gz-face.gf-px { background: #ff4757; transform: rotateY(90deg) translateZ(19px); } 
+        #view-gizmo .gz-face.gf-nx { background: #7a2730; color: #ffb3ba; transform: rotateY(-90deg) translateZ(19px); }
+        #view-gizmo .gz-face.gf-py { background: #2ed573; color: #062c14; transform: rotateX(90deg) translateZ(19px); } 
+        #view-gizmo .gz-face.gf-ny { background: #1d4a2e; color: #6ee2a0; transform: rotateX(-90deg) translateZ(19px); }
+        #view-gizmo .gz-face.gf-pz { background: #1e90ff; transform: rotateY(0deg) translateZ(19px); } 
+        #view-gizmo .gz-face.gf-nz { background: #1a3d68; color: #9bcaf5; transform: rotateY(180deg) translateZ(19px); }
+        #view-gizmo .gz-lab { display: inline-block; transform: scaleY(-1); pointer-events: none; }
+
+        /* === SPLITTER === */
+        #vp-tl-splitter { height: var(--splitter-height); background: var(--bg-toolbar); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); cursor: ns-resize; display: flex; align-items: center; justify-content: center; flex: none; user-select: none; z-index: 101; }
+        #vp-tl-splitter::before { content: ''; width: 48px; height: 4px; background: #666; border-radius: 3px; transition: background 0.15s; }
+        #vp-tl-splitter:hover::before, #vp-tl-splitter.dragging::before { background: var(--accent); }
+
+        /* === TIMELINE === */
+        #timeline-container { height: var(--timeline-height); flex: none; background-color: #050505; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        
+        #timeline-toolbar {
+            height: 44px; background-color: var(--bg-toolbar); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 20; flex: none;
+        }
+        .tb-action-btn {
+            background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff;
+            border-radius: 4px; padding: 6px 12px; font-size: 9px; font-weight: bold; cursor: pointer; transition: 0.2s; width: 85px; text-align: center;
+        }
+        .tb-action-btn:hover { background: rgba(255, 255, 255, 0.15); }
+        .playback-group { display: flex; gap: 4px; align-items: center; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 6px; border: 1px solid #222; }
+        .pb-btn {
+            background: transparent; border: none; color: #888; width: 32px; height: 28px; border-radius: 4px; 
+            cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px; transition: 0.15s;
+        }
+        .pb-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .pb-btn.play-btn { color: var(--accent); font-size: 16px; width: 40px; }
+
+        .timeline-body { flex: 1; overflow: auto; position: relative; display: flex; flex-direction: column; cursor: grab; }
+        #timeline-tracks-container { position: relative; display: flex; flex-direction: column; min-width: 100%; min-height: 100%; width: fit-content; }
+        #timeline-bg-grid { position: absolute; top: 0; left: 0; bottom: 0; z-index: 0; background-color: #111; border-right: 1px solid #333; }
+        #timeline-end-shade { position: absolute; top: 0; bottom: 0; width: 10000px; background: rgba(255, 255, 255, 0.04); border-left: 1px dashed rgba(255, 255, 255, 0.2); z-index: 1; pointer-events: none; transition: left 0.15s; }
+        #timeline-ruler { height: 24px; flex-shrink: 0; position: relative; border-bottom: 1px solid var(--border); cursor: ew-resize; background: rgba(21, 21, 21, 0.9); z-index: 50; overflow: hidden; }
+        #timeline-layers-container { flex: 1; display: flex; flex-direction: column; position: relative; width: 100%; z-index: 10; min-height: fit-content; }
+        #playhead { position: absolute; top: 0; bottom: 0; left: -10px; width: 20px; background: transparent; z-index: 60; pointer-events: auto; cursor: ew-resize; display: flex; justify-content: center; }
+        #playhead::after { content: ''; position: absolute; top: 0; bottom: 0; width: 2px; background-color: var(--accent); pointer-events: none; }
+        #playhead::before { content: ''; position: absolute; top: 4px; width: 18px; height: 18px; background-color: var(--accent); border-radius: 50%; box-shadow: 0 0 15px rgba(47, 105, 255, 0.8); z-index: 61; border: 2px solid #fff; pointer-events: none; }
+
+        .layer { flex: 1; position: relative; display: flex; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); min-height: 35px; }
+        .timeline-item { position: absolute; height: 80%; background-color: var(--item-bg); border: 1px solid #444; border-radius: 4px; display: flex; align-items: center; min-width: 20px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5); cursor: default; touch-action: none; }
+        .timeline-item.selected { border-color: var(--accent); background-color: #1a233a; z-index: 10; }
+        
+        .item-mid { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #ccc; cursor: grab; height: 100%; overflow: hidden; white-space: nowrap; pointer-events: none; padding: 0 10px; }
+        
+        .beat-pattern-preview { flex: 1; display: flex; align-items: center; justify-content: space-evenly; padding: 0 8px; pointer-events: none; overflow: hidden; height: 100%; gap: 1px; }
+        .beat-dot { width: 4px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 50%; transition: 0.2s; }
+        .beat-dot.kick { height: 12px; background: #ff4757; border-radius: 2px; }
+        .beat-dot.snare { height: 10px; background: #2ed573; border-radius: 2px; }
+        .beat-dot.hat { height: 6px; background: #1e90ff; border-radius: 2px; }
+
+        .handle-edge { position: absolute; width: 12px; height: 100%; top: 0; background: rgba(255,255,255,0.2); cursor: ew-resize; z-index: 5; }
+        .handle-edge-left { left: 0; border-radius: 3px 0 0 3px; } .handle-edge-right { right: 0; border-radius: 0 3px 3px 0; }
+
+        #timeline-footer { height: 35px; background-color: var(--bg-toolbar); border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 15px; z-index: 60; }
+        .full-roller { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; gap: 15px; cursor: ew-resize; touch-action: none; }
+        .full-roller::before, .full-roller::after { content: ''; position: absolute; top: 0; bottom: 0; width: 25%; pointer-events: none; }
+        .full-roller::before { left: 0; background: linear-gradient(90deg, var(--bg-toolbar), transparent); }
+        .full-roller::after { right: 0; background: linear-gradient(-90deg, var(--bg-toolbar), transparent); }
+        .fr-val { font-size: 13px; font-weight: 600; color: #555; font-variant-numeric: tabular-nums; flex-shrink: 0; transition: 0.1s; }
+        .fr-val.active { color: var(--accent); font-size: 18px; text-shadow: 0 0 10px rgba(47, 105, 255, 0.5); }
+        .fr-arrow { color: #555; font-size: 16px; font-weight: bold; flex-shrink: 0; }
+
+        /* === BOTTOM BAR === */
+        #bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; height: calc(60px + var(--ios-safe-bottom)); padding-bottom: var(--ios-safe-bottom); background-color: #111; border-top: 1px solid var(--border); display: flex; z-index: 60000; }
+        .tab-btn { flex: 1; background: transparent; border: none; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; position: relative; }
+        .tab-icon { width: 18px; height: 18px; fill: currentColor; z-index: 2; }
+        .tab-label { font-size: 9px; font-weight: 700; letter-spacing: 0.3px; z-index: 2; }
+        .tab-btn.active { color: #fff; }
+
+        /* === PANELS === */
+        #panels-container { position: fixed; bottom: calc(60px + var(--ios-safe-bottom)); left: 0; width: 100%; background-color: var(--bg-panel); border-top: 1px solid var(--border); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1); z-index: 90; height: calc(var(--timeline-height) + var(--splitter-height)); box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; }
+        #panels-container.open { transform: translateY(0); }
+        .panel { display: none; padding: 10px 20px; flex: 1; overflow-y: auto; touch-action: pan-y; }
+        .panel.active { display: block; }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; color: #fff; font-size: 11px; font-weight: 700; padding-bottom: 4px; border-bottom: 1px solid #222; }
+        .panel-header .btn-sm-action { padding: 0 6px; height: 22px; min-width: 22px; font-size: 11px; border-radius: 4px; }
+        .panel-header .btn-sm-danger { height: 22px; min-width: 22px; padding: 0; }
+        .panel-header .btn-sm-danger svg { width: 12px; height: 12px; }
+
+        .assets-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .asset-item { background: var(--item-bg); border: 1px solid var(--border); padding: 12px 5px; text-align: center; border-radius: 8px; color: #ccc; cursor: grab; font-weight: 600; font-size: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; touch-action: none; }
+        .asset-icon { width: 22px; height: 22px; fill: currentColor; opacity: 0.8; }
+
+        .prop-grid { display: flex; flex-direction: column; gap: 6px; padding-bottom: 30px; }
+        .prop-group-title { font-size: 10px; color: #777; text-transform: uppercase; margin-top: 5px; margin-bottom: 5px; letter-spacing: 0.5px; font-weight: bold; }
+        
+        .action-row { display: flex; align-items: stretch; margin-bottom: 10px; width: 100%; min-height: 60px; max-width: 100%; box-sizing: border-box; }
+        .safe-scroll-label { width: 42px; flex-shrink: 0; font-size: 9px; font-weight: 800; color: #888; display: flex; align-items: center; padding-right: 5px; touch-action: pan-y; cursor: default; user-select: none; word-wrap: break-word; }
+        .action-controls { flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+        
+        /* Chan Selector (Left side XYZ) */
+        .chan-col { width: 32px; flex-shrink: 0; display: flex; flex-direction: column; gap: 5px; margin-right: 8px; justify-content: flex-start; }
+        .chan-label { font-size: 9px; font-weight: 800; color: var(--accent); text-align: center; padding-bottom: 2px; border-bottom: 1px solid #333; margin-bottom: 2px; letter-spacing: 1px; }
+        .chan-col .ct-chan { height: 42px; border-radius: 6px; font-size: 11px; }
+        .chan-col .ct-link { height: 32px; border-radius: 6px; margin-top: auto; }
+
+        /* Vert Roller */
+        .v-roller { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 4px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: ns-resize; user-select: none; touch-action: none; }
+        .v-roller .v-neighbor { font-size: 10px; color: #555; opacity: 0.8; cursor: pointer; padding: 4px 10px; transition: 0.1s; }
+        .v-roller .v-neighbor:hover { color: #fff; }
+        .v-roller .v-active { font-size: 14px; font-weight: 800; color: var(--accent); margin: 4px 0; }
+        
+        .font-roller { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #151515; border: 1px solid #333; border-radius: 6px; height: 100%; cursor: ns-resize; touch-action: none; position: relative; overflow: hidden; }
+        .font-roller span { font-size: 14px; font-weight: bold; pointer-events: none; white-space: nowrap; transition: color 0.1s; }
+
+        .btn-sm-action { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; border-radius: 4px; padding: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; transition: 0.2s; font-weight: bold; }
+        .btn-sm-danger { background: rgba(255, 0, 85, 0.1); border: 1px solid #ff0055; color: #ff0055; padding: 4px; height: 26px; min-width: 26px; }
+        .btn-sm-danger svg { width: 14px; height: 14px; fill: currentColor; }
+
+        /* === CURVE EDITOR === */
+        .curve-container { width: 100%; max-width: 100%; height: 100%; display: flex; flex-direction: column; background: #0c0c0c; border: 1px solid #333; border-radius: 6px; overflow: hidden; box-sizing: border-box; }
+        .curve-toolbar { display: flex; height: 44px; background: #111; flex: none; border-bottom: 1px solid #222; }
+        
+        /* New Layout Structures */
+        .curve-main-layout { display: flex; flex: 1; min-height: 0; position: relative; border-bottom: 1px solid #222; background: #0c0c0c; }
+        
+        .curve-y-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+        .y-label { position: absolute; left: 6px; font-size: 9px; color: rgba(255, 255, 255, 0.5); font-family: monospace; transform: translateY(-50%); font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 -1px 3px rgba(0,0,0,0.8); }
+
+        /* Bounds Scroller (Horizontal) */
+        .bound-scroller { display: flex; align-items: center; justify-content: center; gap: 4px; cursor: ew-resize; font-size: 9px; font-weight: bold; color: #aaa; padding: 0 8px; transition: 0.1s; user-select: none; touch-action: none; background: transparent; height: 100%; }
+        .bound-scroller:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .bound-scroller .val { color: var(--accent); font-size: 13px; font-variant-numeric: tabular-nums; pointer-events: none; }
+        
+        /* Unified Horizontal Scroller */
+        .unified-scroller { display: flex; align-items: center; justify-content: space-between; height: 100%; width: 100%; background: transparent; cursor: ew-resize; user-select: none; touch-action: none; transition: background 0.2s; }
+        .unified-scroller:hover { background: rgba(255,255,255,0.03); }
+        .us-btn { font-size: 10px; color: #555; padding: 0 10px; cursor: pointer; height: 100%; display: flex; align-items: center; justify-content: center; font-family: monospace; font-weight: bold; transition: 0.1s; }
+        .us-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .us-val { font-size: 13px; font-weight: bold; color: var(--accent); text-align: center; pointer-events: none; flex: 1; font-variant-numeric: tabular-nums; }
+
+        .curve-main-area { flex: 1; position: relative; overflow: hidden; z-index: 10; }
+        .curve-editor { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+        
+        .curve-bottom-tools { display: flex; height: 44px; background: #111; flex: none; }
+        .cb-tool { display: flex; flex-direction: column; align-items: stretch; border-right: 1px solid #222; }
+        .cb-tool:last-child { border-right: none; }
+        .cb-label { width: 100%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: #666; background: rgba(0,0,0,0.4); border-bottom: 1px solid #222; flex-shrink: 0; padding: 4px 0; }
+        .cb-tool .unified-scroller, .cb-tool .bound-scroller { flex: 1; border: none; background: transparent; border-radius: 0; height: auto; width: 100%; padding: 0; }
+
+        .ct-grp { display: flex; gap: 4px; align-items: center; }
+        .ct-btn, .ct-chan, .ct-link { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #aaa; border-radius: 4px; height: 24px; min-width: 24px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.1s; }
+        .ct-btn:hover, .ct-link:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .ct-chan.active { background: rgba(255,255,255,0.15); }
+        .ct-chan:not(.active) { opacity: 0.3; }
+        .ct-link.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        /* Properties Mini Preview */
+        #props-mini-timeline { position: sticky; top: -10px; z-index: 200; background: #111; display: flex; padding: 6px 12px; border-bottom: 1px solid #222; gap: 8px; margin: 0 -20px 8px -20px; align-items: center; }
+        #mini-play-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--accent); width: 28px; height: 26px; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: 0.15s; }
+        #mini-play-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        #mini-clip-preview { flex: 1; position: relative; height: 22px; background: #181818; border: 1px solid #2a2a2a; border-radius: 5px; overflow: hidden; user-select: none; }
+        #mini-clip-fill { position: absolute; inset: 0; background: var(--accent); opacity: 0.42; }
+        #mini-clip-name { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 600; pointer-events: none; }
+        #mini-playhead-big { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; left: 0; box-shadow: 0 0 6px #fff; pointer-events: none; z-index: 5; }
+
+        .text-input-field { width: 100%; height: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: #fff; padding: 0 10px; border-radius: 4px; font-weight: bold; font-size: 12px; outline: none; transition: 0.15s; font-family: monospace; }
+        .text-input-field:focus { border-color: var(--accent); background: rgba(47, 105, 255, 0.1); }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div id="viewport">
+            <div id="safe-area"></div>
+            <div id="view-gizmo">
+                <div class="gz-cube">
+                    <div class="gz-face gf-px" data-axis="x"><span class="gz-lab">X</span></div>
+                    <div class="gz-face gf-nx" data-axis="-x"><span class="gz-lab">-X</span></div>
+                    <div class="gz-face gf-py" data-axis="y"><span class="gz-lab">Y</span></div>
+                    <div class="gz-face gf-ny" data-axis="-y"><span class="gz-lab">-Y</span></div>
+                    <div class="gz-face gf-pz" data-axis="z"><span class="gz-lab">Z</span></div>
+                    <div class="gz-face gf-nz" data-axis="-z"><span class="gz-lab">-Z</span></div>
+                </div>
+            </div>
+            <div class="ar-selector">
+                <div class="ar-roller" id="ar-roller">
+                    <div class="ar-body" id="ar-body">
+                        <svg class="ar-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2V7h-2v10z"/></svg>
+                        <div class="ar-prev" id="ar-prev">9:16</div>
+                        <div class="ar-value" id="ar-value">1:1</div>
+                        <div class="ar-next" id="ar-next">4:3</div>
+                    </div>
+                </div>
+                
+                <div class="cam-btns-grid">
+                    <button id="btn-add-camera" class="cam-sq-btn" title="Add Camera">+</button>
+                    <button id="btn-del-camera" class="cam-sq-btn" title="Remove Camera">-</button>
+                    <button id="btn-lock-camera" class="cam-sq-btn" style="grid-column: span 2; aspect-ratio: 2/1;" title="Lock Camera">
+                        <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                    </button>
+                </div>
+
+                <div class="ar-roller" id="cam-roller">
+                    <div class="ar-body" id="cam-body">
+                        <svg class="ar-icon" viewBox="0 0 24 24"><path d="M15 8v8H5V8h10m1-2H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4V7c0-.55-.45-1-1-1z"/></svg>
+                        <div class="ar-prev" id="cam-prev">-</div>
+                        <div class="ar-value" id="cam-value">FREE</div>
+                        <div class="ar-next" id="cam-next">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="vp-tools">
+                <div class="eye-btn" title="Toggle Overlays"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" /></svg></div>
+                <div class="tool-btn active" data-tool="translate" title="Location"><svg viewBox="0 0 24 24"><path d="M12 2L8 6h3v5H6V8L2 12l4 4v-3h5v5H8l4 4 4-4h-3v-5h5v3l4-4-4-4v3h-5V6h3z" /></svg></div>
+                <div class="tool-btn" data-tool="rotate" title="Rotation"><svg viewBox="0 0 24 24"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z" /></svg></div>
+                <div class="tool-btn" data-tool="scale" title="Scale"><svg viewBox="0 0 24 24"><path d="M10 21v-2H6.41l4.5-4.5-1.41-1.41-4.5 4.5V14H3v7h7zm4.5-10.09L19 6.41V10h2V3h-7v2h3.59l-4.5 4.5 1.41 1.41z" /></svg></div>
+            </div>
+        </div>
+
+        <div id="vp-tl-splitter"></div>
+
+        <div id="timeline-container">
+            <div id="timeline-toolbar">
+                <button class="tb-action-btn" id="format-toggle">FMT: FRM</button>
+                <div class="playback-group">
+                    <button class="pb-btn" id="pb-prev-beat" title="Prev Beat">|&lt;</button>
+                    <button class="pb-btn" id="pb-prev-qtr" title="Prev 1/4">&lt;</button>
+                    <button class="pb-btn play-btn" id="pb-play">▶</button>
+                    <button class="pb-btn" id="pb-next-qtr" title="Next 1/4">&gt;</button>
+                    <button class="pb-btn" id="pb-next-beat" title="Next Beat">&gt;|</button>
+                </div>
+                <div style="width: 85px;"></div>
+            </div>
+
+            <div class="timeline-body" id="timeline-scroll">
+                <div id="timeline-tracks-container">
+                    <div id="timeline-bg-grid"></div>
+                    <div id="timeline-end-shade"></div>
+                    <div id="timeline-ruler"></div>
+                    <div id="timeline-layers-container"></div>
+                    <div id="playhead"></div>
+                </div>
+            </div>
+            
+            <div id="timeline-footer">
+                <div class="full-roller" id="roller-frame">
+                    <span class="fr-arrow">&lt;</span>
+                    <span class="fr-val active" id="fr-active">1</span>
+                    <div id="fr-dynamic-spans" style="display:flex; gap:12px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="panels-container">
+            <div class="panel" id="panel-props">
+                <div class="panel-header">
+                    <span id="panel-header-title">PROJECT SETTINGS</span>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-sm-action btn-sm-danger" id="btn-delete-clip" style="display:none;"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" /></svg></button>
+                        <button class="btn-sm-action" id="btn-close-panel" style="background:rgba(255,255,255,0.1); width: 32px; font-size: 14px;" title="Back to Timeline">✕</button>
+                    </div>
+                </div>
+                
+                <div id="props-project" style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; height: 44px; background: #111; border-radius: 6px; overflow: hidden; border: 1px solid #333; margin-bottom: 10px;">
+                        <div class="cb-tool" style="flex: 1;">
+                            <div class="cb-label" style="color:var(--accent);">BPM</div>
+                            <div class="bound-scroller" id="roller-bpm"></div>
+                        </div>
+                        <div class="cb-tool" style="flex: 1; border-right: none;">
+                            <div class="cb-label" style="color:var(--accent);">FPS</div>
+                            <div class="bound-scroller" id="roller-fps"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="props-beat" style="display:none;" class="prop-grid">
+                    <div id="props-mini-timeline-audio"></div>
+                    <div class="prop-group-title">VOLUME CURVE</div>
+                    <div class="action-row" style="height: 180px;">
+                        <div class="chan-col">
+                            <div class="chan-label">VOL</div>
+                            <button class="ct-chan active" data-axis="X" style="color:#fff">V</button>
+                        </div>
+                        <div class="action-controls cols-1">
+                            <div class="curve-container" id="cc-vol" data-prop="vol">
+                                <div class="curve-toolbar">
+                                    <div class="cb-tool" style="width: 30%;">
+                                        <div class="cb-label" style="color:var(--accent);">MAX Y</div>
+                                        <div class="bound-scroller bound-max"><span class="val">1.0</span></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">VALUE</div>
+                                        <div class="unified-scroller" data-field="value"></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">FLIP</div>
+                                        <div class="ct-grp" style="flex:1; justify-content:center; gap:8px;">
+                                            <button class="ct-btn ct-flipx" title="Flip X">↔</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="curve-main-layout">
+                                    <div class="curve-y-labels"></div>
+                                    <div class="curve-main-area">
+                                        <canvas id="curve-vol" class="curve-editor"></canvas>
+                                    </div>
+                                </div>
+                                <div class="curve-bottom-tools">
+                                    <div class="cb-tool" style="width: 30%;">
+                                        <div class="cb-label">MIN Y</div>
+                                        <div class="bound-scroller bound-min"><span class="val">0.0</span></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">TILT</div>
+                                        <div class="unified-scroller" data-field="tilt"></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">SMOOTH</div>
+                                        <div class="unified-scroller" data-field="smooth"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="prop-group-title" style="margin-top: 10px; margin-bottom: 10px;">SEQUENCER (1 BAR = 16 STEPS)</div>
+                    <style>
+                        .seq-steps { display: flex; gap: 3px; flex: 1; align-items: center; height: 100%; }
+                        .seq-step { flex: 1; height: 40px; background: #1a1a1a; border: 1px solid #333; cursor: pointer; border-radius: 3px; transition: 0.1s; }
+                        .seq-step.active { background: var(--accent); border-color: #7ab; box-shadow: 0 0 8px rgba(47,105,255,0.4); }
+                        .seq-step:nth-child(4n+1) { border-left-width: 3px; border-left-color: #555; }
+                    </style>
+                    <div id="seq-grid"></div>
+                </div>
+
+                <div id="props-clip" style="display:none;" class="prop-grid">
+                    <div id="props-mini-timeline">
+                        <button id="mini-play-btn" title="Play / Pause">▶</button>
+                        <div id="mini-clip-preview">
+                            <div id="mini-clip-fill"></div>
+                            <div id="mini-clip-name">No clip selected</div>
+                            <div id="mini-playhead-big"></div>
+                        </div>
+                        <div id="mini-frame-val" style="font-size: 10px; font-weight: bold; color: #888;">FRM 0</div>
+                    </div>
+
+                    <div class="prop-group-title">TRANSFORM CURVES</div>
+                    
+                    <div class="action-row" style="height: 220px;">
+                        <div class="chan-col">
+                            <div class="chan-label">LOC</div>
+                            <button class="ct-chan active" data-axis="X" style="color:#ff4757">X</button>
+                            <button class="ct-chan" data-axis="Y" style="color:#2ed573">Y</button>
+                            <button class="ct-chan" data-axis="Z" style="color:#1e90ff">Z</button>
+                        </div>
+                        <div class="action-controls cols-1">
+                            <div class="curve-container" id="cc-loc" data-prop="loc">
+                                <div class="curve-toolbar">
+                                    <div class="cb-tool" style="width: 30%;">
+                                        <div class="cb-label" style="color:var(--accent);">MAX Y</div>
+                                        <div class="bound-scroller bound-max" title="Drag to scale Max Y"><span class="val">2.0</span></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">VALUE</div>
+                                        <div class="unified-scroller" data-field="value"></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">FLIP</div>
+                                        <div class="ct-grp" style="flex:1; justify-content:center; gap:8px;">
+                                            <button class="ct-btn ct-flipx" title="Flip X">↔</button>
+                                            <button class="ct-btn ct-flipy" title="Flip Y">↕</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="curve-main-layout">
+                                    <div class="curve-y-labels"></div>
+                                    <div class="curve-main-area">
+                                        <canvas id="curve-loc" class="curve-editor"></canvas>
+                                    </div>
+                                </div>
+                                <div class="curve-bottom-tools">
+                                    <div class="cb-tool" style="width: 30%;">
+                                        <div class="cb-label">MIN Y</div>
+                                        <div class="bound-scroller bound-min" title="Drag to scale Min Y"><span class="val">-2.0</span></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">TILT</div>
+                                        <div class="unified-scroller" data-field="tilt"></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">SMOOTH</div>
+                                        <div class="unified-scroller" data-field="smooth"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-row" style="height: 220px;">
+                        <div class="chan-col">
+                            <div class="chan-label">ROT</div>
+                            <button class="ct-chan active" data-axis="X" style="color:#ff4757">X</button>
+                            <button class="ct-chan" data-axis="Y" style="color:#2ed573">Y</button>
+                            <button class="ct-chan" data-axis="Z" style="color:#1e90ff">Z</button>
+                        </div>
+                        <div class="action-controls cols-1">
+                            <div class="curve-container" id="cc-rot" data-prop="rot">
+                                <div class="curve-toolbar">
+                                    <div class="cb-tool" style="width: 30%;">
+                                        <div class="cb-label" style="color:var(--accent);">MAX Y</div>
+                                        <div class="bound-scroller bound-max" title="Drag to scale Max Y"><span class="val">90.0</span></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">VALUE</div>
+                                        <div class="unified-scroller" data-field="value"></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">FLIP</div>
+                                        <div class="ct-grp" style="flex:1; justify-content:center; gap:8px;">
+                                            <button class="ct-btn ct-flipx" title="Flip X">↔</button>
+                                            <button class="ct-btn ct-flipy" title="Flip Y">↕</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="curve-main-layout">
+                                    <div class="curve-y-labels"></div>
+                                    <div class="curve-main-area">
+                                        <canvas id="curve-rot" class="curve-editor"></canvas>
+                                    </div>
+                                </div>
+                                <div class="curve-bottom-tools">
+                                    <div class="cb-tool" style="width: 30%;">
+                                        <div class="cb-label">MIN Y</div>
+                                        <div class="bound-scroller bound-min" title="Drag to scale Min Y"><span class="val">-90.0</span></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">TILT</div>
+                                        <div class="unified-scroller" data-field="tilt"></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">SMOOTH</div>
+                                        <div class="unified-scroller" data-field="smooth"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-row" style="height: 220px;">
+                        <div class="chan-col">
+                            <div class="chan-label">SCL</div>
+                            <button class="ct-chan active" data-axis="X" style="color:#ff4757">X</button>
+                            <button class="ct-chan" data-axis="Y" style="color:#2ed573">Y</button>
+                            <button class="ct-chan" data-axis="Z" style="color:#1e90ff">Z</button>
+                            <button class="ct-link active" title="Link Channels">🔗</button>
+                        </div>
+                        <div class="action-controls cols-1">
+                            <div class="curve-container" id="cc-scl" data-prop="scl">
+                                <div class="curve-toolbar">
+                                    <div class="cb-tool" style="width: 30%;">
+                                        <div class="cb-label" style="color:var(--accent);">MAX Y</div>
+                                        <div class="bound-scroller bound-max" title="Drag to scale Max Y"><span class="val">2.0</span></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">VALUE</div>
+                                        <div class="unified-scroller" data-field="value"></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">FLIP</div>
+                                        <div class="ct-grp" style="flex:1; justify-content:center; gap:8px;">
+                                            <button class="ct-btn ct-flipx" title="Flip X">↔</button>
+                                            <button class="ct-btn ct-flipy" title="Flip Y">↕</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="curve-main-layout">
+                                    <div class="curve-y-labels"></div>
+                                    <div class="curve-main-area">
+                                        <canvas id="curve-scl" class="curve-editor"></canvas>
+                                    </div>
+                                </div>
+                                <div class="curve-bottom-tools">
+                                    <div class="cb-tool" style="width: 30%;">
+                                        <div class="cb-label">MIN Y</div>
+                                        <div class="bound-scroller bound-min" title="Drag to scale Min Y"><span class="val">0.0</span></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">TILT</div>
+                                        <div class="unified-scroller" data-field="tilt"></div>
+                                    </div>
+                                    <div class="cb-tool" style="width: 35%;">
+                                        <div class="cb-label">SMOOTH</div>
+                                        <div class="unified-scroller" data-field="smooth"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-row" id="prop-text-row" style="display:none; height: 44px;">
+                        <div class="safe-scroll-label">TEXT</div>
+                        <div class="action-controls cols-1">
+                            <input type="text" id="prop-text-input" spellcheck="false" placeholder="Enter text..." class="text-input-field">
+                        </div>
+                    </div>
+
+                    <div class="action-row" id="prop-font-row" style="display:none; height: 80px;">
+                        <div class="safe-scroll-label">FONT</div>
+                        <div class="action-controls cols-1">
+                            <div class="font-roller" id="prop-font">
+                                <span id="f-top" style="color:#444; font-size: 10px;">Arial</span>
+                                <span id="f-mid" style="color:var(--accent); font-size: 16px;">Impact</span>
+                                <span id="f-bot" style="color:#444; font-size: 10px;">Courier</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-row mat-group" style="display:none; height: 60px;">
+                        <div class="safe-scroll-label">COLOR</div>
+                        <div class="action-controls cols-1">
+                            <div id="prop-mat" style="display:flex; gap:8px; align-items:center; justify-content:center; background: rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:4px; height:100%;">
+                                <input type="color" id="mat-color-input" value="#ffffff" style="width:40px; height:30px; border:1px solid #333; border-radius:6px; background:transparent; cursor:pointer;" />
+                                <span id="mat-color-hex" style="font-size:10px; color:#aaa; font-family:monospace;">#ffffff</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" id="panel-assets">
+                <div class="panel-header">
+                    <span>Assets (Drag & Drop)</span>
+                    <button class="btn-sm-action" id="btn-close-assets" style="background:rgba(255,255,255,0.1); width: 32px; font-size: 14px;" title="Back to Timeline">✕</button>
+                </div>
+                <div class="assets-grid">
+                    <div class="asset-item" data-type="text" data-color="0xffffff" style="border-color:#fff;">
+                        <svg class="asset-icon" viewBox="0 0 24 24"><path d="M5 4v3h5.5v12h3V7H19V4H5z"/></svg>
+                        <span>TEXT</span>
+                    </div>
+                    <div class="asset-item" data-type="cube" data-color="0x2F69FF" style="border-color:#2F69FF;">
+                        <svg class="asset-icon" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zm0 11.5l-9.5-4.75v8.5L12 22l9.5-4.75v-8.5L12 13.5z"/></svg>
+                        <span>CUBE</span>
+                    </div>
+                    <div class="asset-item" data-type="sphere" data-color="0xffffff" style="border-color:#fff;">
+                        <svg class="asset-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+                        <span>SPHERE</span>
+                    </div>
+                    <div class="asset-item" data-type="cube" data-color="0xff0055" style="border-color:#ff0055;">
+                        <svg class="asset-icon" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zm0 11.5l-9.5-4.75v8.5L12 22l9.5-4.75v-8.5L12 13.5z"/></svg>
+                        <span>PINK CUBE</span>
+                    </div>
+                    <div class="asset-item" data-type="beat" data-color="0xaa33ff" style="border-color:#a3f;">
+                        <svg class="asset-icon" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                        <span>AUDIO LOOP</span>
+                    </div>
+                    <div class="asset-item" data-type="piano" data-color="0x33aaff" style="border-color:#3af;">
+                        <svg class="asset-icon" viewBox="0 0 24 24"><path d="M4 3v18h16V3H4zm2 16V5h2v14H6zm4 0V5h2v14h-2zm4 0V5h2v14h-2zm4 0V5h2v14h-2z"/></svg>
+                        <span>PIANO</span>
+                    </div>
+                    <div class="asset-item" data-type="guitar" data-color="0xffaa33" style="border-color:#fa3;">
+                        <svg class="asset-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+                        <span>GUITAR</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="bottom-bar" style="z-index: 105;">
+            <button class="tab-btn active" data-target="timeline"><svg class="tab-icon" viewBox="0 0 24 24"><path d="M17 7h-4v2h4c1.65 0 3 1.35 3 3s-1.35 3-3 3h-4v2h4c2.76 0 5-2.24 5-5s-2.24-5-5-5zm-6 8H7c-1.65 0-3-1.35-3-3s1.35-3 3-3h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-2zm-3-4h8v2H8z" /></svg><span class="tab-label">TIMELINE</span></button>
+            <button class="tab-btn" data-target="props"><svg class="tab-icon" viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z" /></svg><span class="tab-label">PROPS</span></button>
+            <button class="tab-btn" data-target="assets"><svg class="tab-icon" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg><span class="tab-label">ASSETS</span></button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
+        // Global forced scene update for tools
+        window.forceSceneUpdate = () => {};
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
+            let lastAudioStep = -1;
+
+            document.body.addEventListener('pointerdown', () => {
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+            }, { once: true });
+
+            const playDrum = (type, time, vol = 1) => {
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                if (type === 'kick') {
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.frequency.setValueAtTime(150, time); osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+                    gain.gain.setValueAtTime(1 * vol, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+                    osc.start(time); osc.stop(time + 0.5);
+                } else if (type === 'snare') {
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.type = 'triangle'; osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.frequency.setValueAtTime(250, time); gain.gain.setValueAtTime(0.5 * vol, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+                    osc.start(time); osc.stop(time + 0.2);
+                    const noise = audioCtx.createBufferSource(); const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.2, audioCtx.sampleRate);
+                    const data = buffer.getChannelData(0); for(let i=0; i<data.length; i++) data[i] = Math.random() * 2 - 1;
+                    noise.buffer = buffer; const nGain = audioCtx.createGain();
+                    noise.connect(nGain); nGain.connect(audioCtx.destination);
+                    nGain.gain.setValueAtTime(0.5 * vol, time); nGain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+                    noise.start(time);
+                } else if (type === 'hat') {
+                    const noise = audioCtx.createBufferSource(); const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.1, audioCtx.sampleRate);
+                    const data = buffer.getChannelData(0); for(let i=0; i<data.length; i++) data[i] = Math.random() * 2 - 1;
+                    noise.buffer = buffer; const gain = audioCtx.createGain();
+                    const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 5000;
+                    noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+                    gain.gain.setValueAtTime(0.3 * vol, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+                    noise.start(time);
+                } else if (type === 'piano-low' || type === 'piano-mid' || type === 'piano-high') {
+                    const freqs = { 'piano-low': 261.63, 'piano-mid': 329.63, 'piano-high': 392.00 }; // C4, E4, G4
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.type = 'sine'; osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.frequency.setValueAtTime(freqs[type], time);
+                    gain.gain.setValueAtTime(0, time);
+                    gain.gain.linearRampToValueAtTime(0.8 * vol, time + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+                    osc.start(time); osc.stop(time + 0.5);
+                } else if (type === 'guitar-low' || type === 'guitar-mid' || type === 'guitar-high') {
+                    const freqs = { 'guitar-low': 196.00, 'guitar-mid': 246.94, 'guitar-high': 329.63 }; // G3, B3, E4
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth'; osc.connect(gain);
+                    const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(2000, time); filter.frequency.exponentialRampToValueAtTime(100, time + 0.5);
+                    gain.connect(filter); filter.connect(audioCtx.destination);
+                    osc.frequency.setValueAtTime(freqs[type], time);
+                    gain.gain.setValueAtTime(0.8 * vol, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+                    osc.start(time); osc.stop(time + 0.4);
+                }
+            };
+
+            const state = {
+                isPlaying: false, bpm: 120, fps: 30, beatWidth: 60, playheadBeat: 0,
+                format: 0, clips: [], selectedClipId: null, aspectRatio: 1,
+            };
+
+            const fontUrls = [
+                'https://cdn.jsdelivr.net/npm/three@0.156.1/examples/fonts/helvetiker_bold.typeface.json',
+                'https://cdn.jsdelivr.net/npm/three@0.156.1/examples/fonts/helvetiker_regular.typeface.json',
+                'https://cdn.jsdelivr.net/npm/three@0.156.1/examples/fonts/optimer_bold.typeface.json',
+                'https://cdn.jsdelivr.net/npm/three@0.156.1/examples/fonts/droid_sans_bold.typeface.json'
+            ];
+            const stateFonts = ['Helvetiker Bold', 'Helvetiker', 'Optimer Bold', 'Droid Sans'];
+            const loadedFonts = {};
+            const fontLoader = new FontLoader();
+
+            // Preload default font
+            fontLoader.load(fontUrls[0], f => loadedFonts[0] = f);
+            
+            let isCamLocked = false;
+
+            function create3DTextGeometry(text, fontIndex, callback) {
+                if (loadedFonts[fontIndex]) {
+                    const geo = new TextGeometry(text, { font: loadedFonts[fontIndex], size: 1.0, height: 0.2, curveSegments: 4, bevelEnabled: false });
+                    geo.computeBoundingBox();
+                    geo.translate(-0.5 * (geo.boundingBox.max.x - geo.boundingBox.min.x), -0.5 * (geo.boundingBox.max.y - geo.boundingBox.min.y), 0);
+                    callback(geo);
+                } else {
+                    fontLoader.load(fontUrls[fontIndex], (font) => {
+                        loadedFonts[fontIndex] = font;
+                        create3DTextGeometry(text, fontIndex, callback);
+                    });
+                }
+            }
+
+            const curveStates = {
+                loc: { activeAxis: 'X', selPoint: null, linked: false, bounds: {min: -2, max: 2} },
+                rot: { activeAxis: 'X', selPoint: null, linked: false, bounds: {min: -90, max: 90} },
+                scl: { activeAxis: 'X', selPoint: null, linked: true, bounds: {min: 0, max: 2} },
+                vol: { activeAxis: 'X', selPoint: null, linked: true, bounds: {min: 0, max: 1} }
+            };
+            const getCurveBounds = (prop) => curveStates[prop].bounds;
+
+            const snap = (val) => Math.round(val * 4) / 4;
+            const vibe = (ms = 5) => { if (navigator.vibrate) navigator.vibrate(ms); };
+
+            function getProjectDurationBeats() {
+                let max = 0;
+                state.clips.forEach(c => {
+                    if (c.startBeat + c.duration > max) max = c.startBeat + c.duration;
+                });
+                return max > 0 ? max : 4; 
+            }
+
+            // --- 1. Viewport ---
+            const container = document.getElementById('viewport');
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            scene.fog = new THREE.Fog(0x0a0a0a, 5, 25);
+
+            const camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(0, 4, 8);
+            camera.lookAt(0, 0, 0);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: false });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            const gridHelper = new THREE.GridHelper(100, 100, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            const gizmoEl = document.getElementById('view-gizmo');
+            const gzCube = gizmoEl.querySelector('.gz-cube');
+
+            let isProgrammaticCamChange = false;
+
+            const _camAnim = { active: false, t: 0, dur: 0.45, fromPos: new THREE.Vector3(), toPos: new THREE.Vector3() };
+            const orbitToAxis = (axisName) => {
+                const dist = camera.position.distanceTo(orbitControls.target);
+                const t = orbitControls.target;
+                
+                const offsets = {
+                     'x': new THREE.Vector3( dist, 0, 0), '-x': new THREE.Vector3(-dist, 0, 0),
+                     'y': new THREE.Vector3( 0.0001, dist, 0), '-y': new THREE.Vector3( 0.0001, -dist, 0),
+                     'z': new THREE.Vector3( 0, 0, dist), '-z': new THREE.Vector3( 0, 0, -dist)
+                };
+                const off = offsets[axisName];
+                if (!off) return;
+                _camAnim.fromPos.copy(camera.position);
+                _camAnim.toPos.copy(t).add(off);
+                _camAnim.t = 0;
+                _camAnim.active = true;
+            };
+
+            const DRAG_THRESHOLD = 6;
+            const gzDrag = { active: false, rotating: false, pointerId: null, downX: 0, downY: 0, lastX: 0, lastY: 0, downAxis: null };
+            let gzVelX = 0, gzVelY = 0; 
+
+            const _orbitOffset = new THREE.Vector3();
+            const _orbitRight  = new THREE.Vector3();
+            const _orbitFwd    = new THREE.Vector3();
+            const _orbitQ      = new THREE.Quaternion();
+
+            const orbitDelta = (dx, dy) => {
+                const sensitivity = 0.01;
+                const yaw   = -dx * sensitivity;
+                const pitch = -dy * sensitivity;
+
+                _orbitOffset.copy(camera.position).sub(orbitControls.target);
+                _orbitQ.setFromAxisAngle(camera.up, yaw);
+                _orbitOffset.applyQuaternion(_orbitQ);
+
+                _orbitFwd.copy(_orbitOffset).multiplyScalar(-1).normalize();
+                _orbitRight.crossVectors(_orbitFwd, camera.up).normalize();
+
+                const offLen = _orbitOffset.length();
+                _orbitQ.setFromAxisAngle(_orbitRight, pitch);
+                const candidate = _orbitOffset.clone().applyQuaternion(_orbitQ);
+                if (Math.abs(candidate.clone().normalize().dot(camera.up)) < 0.985) _orbitOffset.copy(candidate);
+                _orbitOffset.setLength(offLen);
+
+                isProgrammaticCamChange = true;
+                camera.position.copy(orbitControls.target).add(_orbitOffset);
+                camera.lookAt(orbitControls.target);
+                orbitControls.update();
+                isProgrammaticCamChange = false;
+            };
+
+            gizmoEl.addEventListener('pointerdown', (e) => {
+                if (camIndex !== 0 && !isCamLocked) setCamIndex(0);
+                gzDrag.active = true; gzDrag.rotating = false; gzDrag.pointerId = e.pointerId;
+                gzDrag.downX = gzDrag.lastX = e.clientX; gzDrag.downY = gzDrag.lastY = e.clientY;
+                gzVelX = 0; gzVelY = 0;
+                const face = e.target.closest('.gz-face');
+                gzDrag.downAxis = face ? face.dataset.axis : null;
+                gizmoEl.setPointerCapture(e.pointerId); gizmoEl.classList.add('dragging');
+                _camAnim.active = false; e.preventDefault(); e.stopPropagation();
+            });
+            
+            gizmoEl.addEventListener('pointermove', (e) => {
+                if (!gzDrag.active) return;
+                const dx = e.clientX - gzDrag.lastX; const dy = e.clientY - gzDrag.lastY;
+                if (!gzDrag.rotating && Math.hypot(e.clientX - gzDrag.downX, e.clientY - gzDrag.downY) > DRAG_THRESHOLD) gzDrag.rotating = true;
+                if (gzDrag.rotating && (dx || dy)) { 
+                    orbitDelta(dx, dy); 
+                    gzVelX = dx; gzVelY = dy; 
+                    gzDrag.lastX = e.clientX; gzDrag.lastY = e.clientY; 
+                }
+            });
+
+            const finishGizmoDrag = (e) => {
+                if (!gzDrag.active) return;
+                if (!gzDrag.rotating && gzDrag.downAxis) orbitToAxis(gzDrag.downAxis);
+                gzDrag.active = false; gzDrag.rotating = false; gzDrag.downAxis = null;
+                gizmoEl.classList.remove('dragging');
+                try { gizmoEl.releasePointerCapture(e.pointerId); } catch (_) {}
+            };
+            gizmoEl.addEventListener('pointerup', finishGizmoDrag);
+            gizmoEl.addEventListener('pointercancel', finishGizmoDrag);
+
+            let overlaysVisible = true;
+            document.querySelector('.eye-btn').addEventListener('click', () => {
+                vibe(10);
+                overlaysVisible = !overlaysVisible;
+                gridHelper.visible = overlaysVisible;
+                document.querySelectorAll('.tool-btn, .ar-selector, #view-gizmo').forEach(el => {
+                    el.style.opacity = overlaysVisible ? '1' : '0';
+                    el.style.pointerEvents = overlaysVisible ? 'auto' : 'none';
+                });
+                if (!overlaysVisible) transformControl.detach();
+                else if (state.selectedClipId) {
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if (clip && document.querySelector('.tool-btn.active')) transformControl.attach(clip.mesh);
+                }
+                document.querySelector('.eye-btn').style.opacity = overlaysVisible ? '1' : '0.3';
+                document.querySelector('.eye-btn').classList.toggle('disabled', !overlaysVisible);
+            });
+
+            const AR_PRESETS = [ {label:'21:9', value:2.3333}, {label:'16:9', value:1.7777}, {label:'4:3', value:1.3333}, {label:'1:1', value:1}, {label:'4:5', value:0.8}, {label:'3:4', value:0.75}, {label:'9:16', value:0.5625} ];
+            const mod = (n, m) => ((n % m) + m) % m;
+            let arIndex = 3;
+            const setArIndex = (i) => {
+                arIndex = mod(i, AR_PRESETS.length);
+                const preset = AR_PRESETS[arIndex];
+                state.aspectRatio = preset.value;
+                document.getElementById('ar-value').innerText = preset.label;
+                document.getElementById('ar-prev').innerText = AR_PRESETS[mod(arIndex - 1, AR_PRESETS.length)].label;
+                document.getElementById('ar-next').innerText = AR_PRESETS[mod(arIndex + 1, AR_PRESETS.length)].label;
+                resizeViewport();
+            };
+            const arBody = document.getElementById('ar-body');
+            let arDrag = false, arStartY = 0, arStartIdx = 0;
+            arBody.onpointerdown = (e) => { arDrag = true; arStartY = e.clientY; arStartIdx = arIndex; arBody.setPointerCapture(e.pointerId); };
+            arBody.onpointermove = (e) => { 
+                if (!arDrag) return; 
+                let newIdx = arStartIdx - Math.round((arStartY - e.clientY) / 20);
+                if (mod(newIdx, AR_PRESETS.length) !== arIndex) { vibe(10); setArIndex(newIdx); }
+            };
+            arBody.onpointerup = (e) => { arDrag = false; try { arBody.releasePointerCapture(e.pointerId); } catch(_) {} };
+
+            const cameras = [ { id: 'free', name: 'FREE', helper: null } ];
+            let camIndex = 0;
+            const updateCamRollerUI = () => {
+                const len = cameras.length;
+                if (len === 1) {
+                    document.getElementById('cam-prev').innerText = '-';
+                    document.getElementById('cam-value').innerText = cameras[0].name;
+                    document.getElementById('cam-next').innerText = '-';
+                } else {
+                    document.getElementById('cam-prev').innerText = cameras[mod(camIndex - 1, len)].name;
+                    document.getElementById('cam-value').innerText = cameras[camIndex].name;
+                    document.getElementById('cam-next').innerText = cameras[mod(camIndex + 1, len)].name;
+                }
+            };
+            const setCamIndex = (i) => {
+                if (cameras.length <= 1) return;
+                camIndex = mod(i, cameras.length);
+                updateCamRollerUI();
+                const camInfo = cameras[camIndex];
+                
+                document.getElementById('safe-area').style.display = camIndex === 0 ? 'none' : 'block';
+                isCamLocked = false;
+                document.getElementById('btn-lock-camera').classList.remove('active');
+                orbitControls.enabled = true;
+
+                if (camInfo.id !== 'free') {
+                    isProgrammaticCamChange = true;
+                    camera.position.copy(camInfo.pos);
+                    orbitControls.target.copy(camInfo.target);
+                    camera.lookAt(orbitControls.target);
+                    orbitControls.update();
+                    isProgrammaticCamChange = false;
+                }
+            };
+            const camBody = document.getElementById('cam-body');
+            let camDrag = false, camStartY = 0, camStartIdx = 0;
+            camBody.onpointerdown = (e) => { camDrag = true; camStartY = e.clientY; camStartIdx = camIndex; camBody.setPointerCapture(e.pointerId); };
+            camBody.onpointermove = (e) => { 
+                if (!camDrag) return; 
+                let newIdx = camStartIdx - Math.round((camStartY - e.clientY) / 20);
+                if (mod(newIdx, cameras.length) !== camIndex) { vibe(10); setCamIndex(newIdx); }
+            };
+            camBody.onpointerup = (e) => { camDrag = false; try { camBody.releasePointerCapture(e.pointerId); } catch(_) {} };
+
+            document.getElementById('btn-add-camera').addEventListener('click', () => {
+                vibe(10);
+                
+                const newCamObj = new THREE.PerspectiveCamera(camera.fov, camera.aspect, camera.near, camera.far);
+                newCamObj.position.copy(camera.position);
+                newCamObj.quaternion.copy(camera.quaternion);
+                scene.add(newCamObj);
+                
+                const helper = new THREE.CameraHelper(newCamObj);
+                scene.add(helper);
+
+                const newCam = {
+                    id: 'cam_' + Date.now(),
+                    name: 'CAM ' + cameras.length,
+                    pos: camera.position.clone(),
+                    target: orbitControls.target.clone(),
+                    obj: newCamObj,
+                    helper: helper
+                };
+                cameras.push(newCam);
+                setCamIndex(cameras.length - 1);
+            });
+
+            document.getElementById('btn-del-camera').addEventListener('click', () => {
+                if (camIndex === 0) return;
+                vibe(10);
+                const camToRemove = cameras[camIndex];
+                if (camToRemove.obj) scene.remove(camToRemove.obj);
+                if (camToRemove.helper) scene.remove(camToRemove.helper);
+                cameras.splice(camIndex, 1);
+                setCamIndex(camIndex - 1);
+            });
+
+            document.getElementById('btn-lock-camera').addEventListener('click', () => {
+                if (camIndex === 0) return;
+                isCamLocked = !isCamLocked;
+                document.getElementById('btn-lock-camera').classList.toggle('active', isCamLocked);
+                vibe(10);
+            });
+            updateCamRollerUI();
+
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(5, 5, 5);
+            scene.add(dirLight);
+
+            const orbitControls = new OrbitControls(camera, renderer.domElement);
+            orbitControls.enableDamping = false;
+            
+            orbitControls.addEventListener('change', () => {
+                if (!isProgrammaticCamChange && camIndex !== 0 && !isCamLocked) {
+                    setCamIndex(0);
+                }
+            });
+
+            const transformControl = new TransformControls(camera, renderer.domElement);
+            scene.add(transformControl);
+            transformControl.addEventListener('dragging-changed', (e) => {
+                orbitControls.enabled = !e.value;
+            });
+            
+            // CURVE HELPER (Hermite Spline mixed with Linear Sharpness)
+            const getTangent = (arr, idx) => {
+                let k = arr[idx];
+                let tilt = k.tilt !== undefined ? k.tilt : 1.0;
+                let sm = k.smooth !== undefined ? k.smooth : 0.0;
+                let base_m = 0;
+                
+                let k0 = idx > 0 ? arr[idx-1] : k;
+                let k2 = idx < arr.length-1 ? arr[idx+1] : k;
+                if (k0 === k && k2 === k) base_m = 0;
+                else if (k0 === k) base_m = (k2.v - k.v) / (k2.t - k.t);
+                else if (k2 === k) base_m = (k.v - k0.v) / (k.t - k0.t);
+                else base_m = (k2.v - k0.v) / (k2.t - k0.t);
+                
+                // Tilt modifies tangent height. Positive smooth adds bouncy overshoot to tangents.
+                return base_m * tilt * (1 + (sm > 0 ? sm : 0));
+            };
+
+            const getV = (arr, t) => {
+                if(!arr || arr.length===0) return 0;
+                if(arr.length===1) return arr[0].v;
+                let k1=arr[0], k2=arr[arr.length-1], idx=0;
+                for(let i=0; i<arr.length-1; i++){
+                    if(t >= arr[i].t && t <= arr[i+1].t) { k1=arr[i]; k2=arr[i+1]; idx=i; break; }
+                }
+                if(t <= arr[0].t) return arr[0].v;
+                if(t >= arr[arr.length-1].t) return arr[arr.length-1].v;
+
+                const dt1 = k2.t - k1.t;
+                if (dt1 <= 0.0001) return k2.v;
+                const pt = (t - k1.t) / dt1;
+
+                // Hermite spline base
+                let m1 = getTangent(arr, idx) * dt1;
+                let m2 = getTangent(arr, idx+1) * dt1;
+
+                const t2 = pt * pt;
+                const t3 = t2 * pt;
+                const hermiteV = (2*t3 - 3*t2 + 1)*k1.v + (t3 - 2*t2 + pt)*m1 + (-2*t3 + 3*t2)*k2.v + (t3 - t2)*m2;
+                
+                // Linear Base
+                const linearV = k1.v + (k2.v - k1.v) * pt;
+
+                // If Smooth is negative, mix towards pure sharp linear curve
+                let sm = k1.smooth !== undefined ? k1.smooth : 0.0;
+                let sharpMix = sm < 0 ? Math.abs(Math.max(-1, sm)) : 0;
+                return hermiteV * (1 - sharpMix) + linearV * sharpMix;
+            };
+
+            const updateKey = (arr, currentT, val) => {
+                let existing = arr.find(k => Math.abs(k.t - currentT) < 0.001);
+                if(existing) existing.v = val;
+                else { arr.push({t: currentT, v: val, tilt: 1, smooth: 0}); arr.sort((a,b)=>a.t-b.t); }
+            };
+
+            const syncLinkedChannels = (clip, prop, sourceAxis) => {
+                if (!curveStates[prop].linked) return;
+                const sourceData = JSON.stringify(clip.anim[prop+sourceAxis]);
+                ['X','Y','Z'].forEach(axis => {
+                    if (axis !== sourceAxis) clip.anim[prop+axis] = JSON.parse(sourceData);
+                });
+            };
+
+            window.forceSceneUpdate = () => { updateScene(state.playheadBeat); };
+
+            transformControl.addEventListener('change', () => {
+                if (state.selectedClipId && transformControl.object) {
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if (clip) {
+                        let t = (state.playheadBeat - clip.startBeat) / clip.duration;
+                        t = Math.max(0, Math.min(1, t));
+                        
+                        const snapT = 1 / (clip.duration * 8);
+                        t = Math.round(t / snapT) * snapT;
+                        t = Math.max(0, Math.min(1, Math.round(t * 10000) / 10000));
+                        
+                        updateKey(clip.anim.locX, t, Math.max(-99, Math.min(99, transformControl.object.position.x)));
+                        if(curveStates.loc.linked) syncLinkedChannels(clip, 'loc', 'X');
+                        else {
+                            updateKey(clip.anim.locY, t, Math.max(-99, Math.min(99, transformControl.object.position.y)));
+                            updateKey(clip.anim.locZ, t, Math.max(-99, Math.min(99, transformControl.object.position.z)));
+                        }
+
+                        updateKey(clip.anim.rotX, t, Math.max(-99, Math.min(99, THREE.MathUtils.radToDeg(transformControl.object.rotation.x))));
+                        if(curveStates.rot.linked) syncLinkedChannels(clip, 'rot', 'X');
+                        else {
+                            updateKey(clip.anim.rotY, t, Math.max(-99, Math.min(99, THREE.MathUtils.radToDeg(transformControl.object.rotation.y))));
+                            updateKey(clip.anim.rotZ, t, Math.max(-99, Math.min(99, THREE.MathUtils.radToDeg(transformControl.object.rotation.z))));
+                        }
+
+                        updateKey(clip.anim.sclX, t, Math.max(0, Math.min(99, transformControl.object.scale.x)));
+                        if(curveStates.scl.linked) syncLinkedChannels(clip, 'scl', 'X');
+                        else {
+                            updateKey(clip.anim.sclY, t, Math.max(0, Math.min(99, transformControl.object.scale.y)));
+                            updateKey(clip.anim.sclZ, t, Math.max(0, Math.min(99, transformControl.object.scale.z)));
+                        }
+
+                        ['loc', 'rot', 'scl'].forEach(prop => {
+                            renderCurve(`curve-${prop}`, prop, clip);
+                            const cont = document.querySelector(`.curve-container[data-prop="${prop}"]`);
+                            if(cont) cont.querySelectorAll('.unified-scroller').forEach(us => us.updateSelf && us.updateSelf());
+                        });
+                    }
+                }
+            });
+
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    vibe(10);
+                    const tool = btn.dataset.tool;
+                    if (btn.classList.contains('active')) {
+                        btn.classList.remove('active'); transformControl.detach(); transformControl.enabled = false;
+                    } else {
+                        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active'); transformControl.setMode(tool); transformControl.enabled = true;
+                        if (state.selectedClipId) {
+                            const clip = state.clips.find(c => c.id === state.selectedClipId);
+                            if (clip && clip.type !== 'beat') transformControl.attach(clip.mesh);
+                        }
+                    }
+                });
+            });
+
+            function resizeViewport() {
+                let w = container.clientWidth; let h = container.clientHeight;
+                if (w === 0 || h === 0) return;
+                camera.aspect = w / h; camera.updateProjectionMatrix();
+                renderer.setSize(w, h);
+                const safeArea = document.getElementById('safe-area');
+                let safeW = w, safeH = h;
+                if (state.aspectRatio) {
+                    if (w / h > state.aspectRatio) { safeW = h * state.aspectRatio; safeH = h; }
+                    else { safeW = w; safeH = w / state.aspectRatio; }
+                }
+                safeArea.style.width = safeW + 'px'; safeArea.style.height = safeH + 'px';
+                
+                const maxPanelHeight = 350;
+                let uiScale = 1;
+                if (h < maxPanelHeight) uiScale = Math.max(0.4, h / maxPanelHeight);
+                const arSel = document.querySelector('.ar-selector');
+                const vpTools = document.querySelector('.vp-tools');
+                if (arSel) { arSel.style.transform = `scale(${uiScale})`; arSel.style.transformOrigin = 'top left'; }
+                if (vpTools) { vpTools.style.transform = `scale(${uiScale})`; vpTools.style.transformOrigin = 'top right'; }
+            }
+            const resizeObserver = new ResizeObserver(() => resizeViewport());
+            resizeObserver.observe(container);
+            window.addEventListener('resize', resizeViewport);
+
+            const splitter = document.getElementById('vp-tl-splitter');
+            const root = document.documentElement;
+            let splitDragging = false, splitStartY = 0, startTimelinePx = 0;
+            splitter.addEventListener('pointerdown', (e) => {
+                splitDragging = true; splitStartY = e.clientY;
+                startTimelinePx = document.getElementById('timeline-container').getBoundingClientRect().height;
+                splitter.classList.add('dragging'); splitter.setPointerCapture(e.pointerId);
+            });
+            splitter.addEventListener('pointermove', (e) => {
+                if (!splitDragging) return;
+                const dy = e.clientY - splitStartY;
+                const clamped = Math.max(80, Math.min(window.innerHeight - 200, startTimelinePx - dy));
+                root.style.setProperty('--timeline-height', clamped + 'px');
+            });
+            splitter.addEventListener('pointerup', () => { splitDragging = false; splitter.classList.remove('dragging'); });
+
+            let lastDrawnRulerBeats = 0;
+
+            function getContainerBeats() {
+                return Math.max(getProjectDurationBeats() + 16, state.playheadBeat + 4, document.getElementById('timeline-scroll').clientWidth / state.beatWidth);
+            }
+
+            function forceRedrawTimeline() {
+                const cb = getContainerBeats();
+                const bgGrid = document.getElementById('timeline-bg-grid');
+                bgGrid.style.backgroundSize = `${state.beatWidth}px 100%, ${state.beatWidth / 4}px 100%`;
+                bgGrid.style.backgroundImage = `linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)`;
+                bgGrid.style.width = `${cb * state.beatWidth}px`;
+                document.getElementById('timeline-tracks-container').style.width = `${cb * state.beatWidth}px`;
+                updateTimelineRuler(cb);
+                updateScene(state.playheadBeat);
+            }
+
+            function checkTimelineExpansion() {
+                const cb = getContainerBeats();
+                document.getElementById('timeline-tracks-container').style.width = `${cb * state.beatWidth}px`;
+                document.getElementById('timeline-bg-grid').style.width = `${cb * state.beatWidth}px`;
+                if (cb > lastDrawnRulerBeats) {
+                    updateTimelineRuler(cb + 20);
+                }
+            }
+
+            function updateTimelineRuler(containerBeats) {
+                lastDrawnRulerBeats = containerBeats;
+                const ruler = document.getElementById('timeline-ruler');
+                ruler.innerHTML = '';
+                
+                let step = 1;
+                if (state.beatWidth > 60) step = 0.25;
+                else if (state.beatWidth > 30) step = 0.5;
+                else if (state.beatWidth < 10) step = 4;
+                else if (state.beatWidth < 20) step = 2;
+
+                for (let i = 0; i <= containerBeats; i += step) {
+                    const mark = document.createElement('div');
+                    const isMajor = i % 1 === 0;
+                    const isBar = i % 4 === 0;
+                    
+                    let markHeight = isBar ? '15px' : (isMajor ? '10px' : '5px');
+                    let markColor = isBar ? '#999' : (isMajor ? '#666' : '#333');
+                    let textTop = isBar ? '9px' : '12px';
+
+                    mark.style.cssText = `position:absolute; left:${i * state.beatWidth}px; border-left:1px solid ${markColor}; height:${markHeight}; color:${isBar ? '#ddd' : '#888'}; font-size:9px; padding-left:3px; top:${textTop}; pointer-events:none; font-weight:${isBar ? 'bold' : 'normal'};`;
+                    
+                    if (isMajor || state.beatWidth > 120) {
+                        const sec = (i * 60) / state.bpm;
+                        if (state.format === 0) mark.innerText = Math.round(sec * state.fps) + 'f';
+                        else mark.innerText = sec.toFixed(1) + 's';
+                    }
+                    ruler.appendChild(mark);
+                }
+                state.clips.forEach(c => updateClipDOM(document.getElementById(c.id), c));
+            }
+
+            const adaptTimelineWidth = () => {
+                const viewWidth = document.getElementById('timeline-scroll').clientWidth;
+                if (viewWidth > 0) {
+                    state.beatWidth = Math.max(10, viewWidth / Math.max(4, getProjectDurationBeats()));
+                } else {
+                    state.beatWidth = 60; 
+                }
+                forceRedrawTimeline();
+            };
+
+            function bindProjectRoller(elId, getter, setter, minFn, maxFn, isFloat = false) {
+                const el = document.getElementById(elId);
+                if (!el) return;
+                el.innerHTML = `<span class="val"></span>`;
+                const valSpan = el.querySelector('.val');
+                
+                const format = (v) => isFloat && state.format !== 0 ? v.toFixed(1) : Math.round(v);
+
+                const updateDisplay = () => { 
+                    valSpan.innerText = format(getter());
+                };
+
+                let isDrag = false, startX = 0, exactVal = 0;
+                
+                el.addEventListener('pointerdown', e => {
+                    isDrag = true; startX = e.clientX; exactVal = getter(); el.setPointerCapture(e.pointerId);
+                    e.preventDefault(); e.stopPropagation();
+                });
+                
+                el.addEventListener('pointermove', e => {
+                    if (!isDrag) return;
+                    const dx = e.clientX - startX;
+                    exactVal += dx * (isFloat && state.format !== 0 ? 0.05 : 0.5);
+                    startX = e.clientX;
+                    
+                    let snapped = Math.max(minFn(), Math.min(maxFn(), isFloat && state.format !== 0 ? Math.round(exactVal*10)/10 : Math.round(exactVal)));
+                    
+                    if (snapped !== getter()) {
+                        vibe(2); setter(snapped); updateDisplay(); forceRedrawTimeline();
+                    }
+                });
+                
+                el.addEventListener('pointerup', () => { isDrag = false; });
+                el.addEventListener('pointercancel', () => { isDrag = false; });
+                
+                el.updateSelf = updateDisplay;
+                updateDisplay();
+            }
+
+            // --- Unified Horizontal Scroller Factory ---
+            function bindUnifiedScroller(el, prop) {
+                const field = el.dataset.field; // 'value', 'tilt', 'smooth'
+                el.innerHTML = `<div class="us-btn us-prev">-0.1</div><div class="us-val">-</div><div class="us-btn us-next">+0.1</div>`;
+                const valSpan = el.querySelector('.us-val');
+                
+                const getVal = () => {
+                    const sp = curveStates[prop].selPoint;
+                    if(!sp) return 0;
+                    if(field === 'value') return sp.v;
+                    if(field === 'tilt') return sp.tilt !== undefined ? sp.tilt : 1.0;
+                    if(field === 'smooth') return sp.smooth !== undefined ? sp.smooth : 0.0;
+                };
+
+                const setVal = (v) => {
+                    const sp = curveStates[prop].selPoint;
+                    if(!sp) return;
+                    
+                    if(field === 'value') {
+                        const bounds = getCurveBounds(prop);
+                        sp.v = Math.max(bounds.min, Math.min(bounds.max, v));
+                    }
+                    else if(field === 'tilt') sp.tilt = Math.max(-5, Math.min(5, v));
+                    else if(field === 'smooth') sp.smooth = Math.max(-2, Math.min(2, v)); // -2 to 2 allowed
+                    
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if(clip && curveStates[prop].linked) syncLinkedChannels(clip, prop, curveStates[prop].activeAxis);
+                };
+
+                const updateDisplay = () => {
+                    if(!curveStates[prop].selPoint) {
+                        valSpan.innerText = '-';
+                        el.style.opacity = '0.3';
+                        el.style.pointerEvents = 'none';
+                        return;
+                    }
+                    el.style.opacity = '1';
+                    el.style.pointerEvents = 'auto';
+                    valSpan.innerText = getVal().toFixed(2);
+                };
+
+                const step = 0.1;
+                let isDrag = false, startX = 0, startV = 0;
+                let holdTimer = null, cycleInterval = null, isHolding = false;
+                let initialClickPos = {x:0, y:0};
+
+                const clearHold = () => { clearTimeout(holdTimer); clearInterval(cycleInterval); isHolding = false; };
+
+                const applyDelta = (d) => {
+                    if(!curveStates[prop].selPoint) return;
+                    setVal(getVal() + d);
+                    updateDisplay(); window.forceSceneUpdate();
+                    const clip = state.clips.find(c=>c.id===state.selectedClipId);
+                    if(clip) renderCurve(`curve-${prop}`, prop, clip);
+                };
+
+                el.addEventListener('pointerdown', e => {
+                    if(!curveStates[prop].selPoint) return;
+                    isDrag = true; startX = e.clientX; startV = getVal();
+                    initialClickPos = {x: e.clientX, y: e.clientY};
+                    el.setPointerCapture(e.pointerId);
+
+                    const isPrev = e.target.closest('.us-prev');
+                    const isNext = e.target.closest('.us-next');
+                    
+                    if(isPrev || isNext) {
+                        const d = isNext ? step : -step;
+                        isHolding = true;
+                        applyDelta(d);
+                        vibe(5);
+                        holdTimer = setTimeout(() => {
+                            cycleInterval = setInterval(() => { applyDelta(d); vibe(2); }, 50);
+                        }, 400);
+                    }
+                });
+
+                el.addEventListener('pointermove', e => {
+                    if(!isDrag) return;
+                    // Break hold cycling if dragged past button to allow sliding
+                    if(isHolding && Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) > 5) clearHold();
+                    
+                    if(!isHolding) {
+                        const dx = e.clientX - startX;
+                        const newVal = startV + dx * 0.01; 
+                        const current = getVal();
+                        
+                        // Haptic feedback snap on 0.1 crosses
+                        if (Math.round(newVal * 10) !== Math.round(current * 10)) vibe(2);
+                        
+                        setVal(newVal);
+                        if (getVal() !== current) {
+                            updateDisplay(); window.forceSceneUpdate();
+                            const clip = state.clips.find(c=>c.id===state.selectedClipId);
+                            if(clip) renderCurve(`curve-${prop}`, prop, clip);
+                        }
+                    }
+                });
+
+                el.addEventListener('pointerup', () => { isDrag = false; clearHold(); });
+                el.addEventListener('pointercancel', () => { isDrag = false; clearHold(); });
+
+                el.updateSelf = updateDisplay;
+                updateDisplay();
+            }
+
+            function bindBoundsRollers(cont, prop) {
+                const maxEl = cont.querySelector('.bound-max');
+                const minEl = cont.querySelector('.bound-min');
+                if(!maxEl || !minEl) return;
+                
+                const updateUI = () => {
+                    maxEl.querySelector('.val').innerText = curveStates[prop].bounds.max.toFixed(1);
+                    minEl.querySelector('.val').innerText = curveStates[prop].bounds.min.toFixed(1);
+                };
+
+                const attachDrag = (el, isMax) => {
+                    let drag = false, startX = 0, startVal = 0, initialBounds = null, clip = null;
+                    el.addEventListener('pointerdown', e => {
+                        drag = true; startX = e.clientX; 
+                        startVal = isMax ? curveStates[prop].bounds.max : curveStates[prop].bounds.min;
+                        initialBounds = { min: curveStates[prop].bounds.min, max: curveStates[prop].bounds.max };
+                        clip = state.clips.find(c => c.id === state.selectedClipId);
+                        
+                        if (clip) clip._backupAnim = JSON.parse(JSON.stringify(clip.anim));
+                        
+                        el.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation();
+                    });
+                    el.addEventListener('pointermove', e => {
+                        if (!drag) return;
+                        const dx = e.clientX - startX;
+                        let newVal = startVal + dx * 0.02; // slower sensitivity for horizontal drag
+                        let rounded = Math.round(newVal * 10) / 10;
+                        
+                        let currentBound = isMax ? curveStates[prop].bounds.max : curveStates[prop].bounds.min;
+                        if (rounded !== Math.round(currentBound * 10) / 10) vibe(2); // Haptic feedback snap
+                        
+                        newVal = rounded;
+                        
+                        let newMin = initialBounds.min;
+                        let newMax = initialBounds.max;
+                        
+                        if (isMax) newMax = Math.max(newMin + 0.1, newVal);
+                        else newMin = Math.min(newMax - 0.1, newVal);
+                        
+                        curveStates[prop].bounds.min = newMin;
+                        curveStates[prop].bounds.max = newMax;
+                        
+                        // Scale relatively to 0 using the original points
+                        if (clip && clip._backupAnim) {
+                            ['X','Y','Z'].forEach(axis => {
+                                clip.anim[prop+axis].forEach((pt, i) => {
+                                    const origPt = clip._backupAnim[prop+axis][i];
+                                    
+                                    if (origPt.v > 0) {
+                                        const scale = initialBounds.max === 0 ? 1 : (newMax / initialBounds.max);
+                                        pt.v = origPt.v * scale;
+                                    } else if (origPt.v < 0) {
+                                        const scale = initialBounds.min === 0 ? 1 : (newMin / initialBounds.min);
+                                        pt.v = origPt.v * scale;
+                                    } else {
+                                        pt.v = 0;
+                                    }
+                                    
+                                    pt.v = Math.max(newMin, Math.min(newMax, pt.v));
+                                });
+                            });
+                        }
+                        
+                        updateUI();
+                        if(clip) renderCurve(`curve-${prop}`, prop, clip);
+                        updateScene(state.playheadBeat);
+                        updatePropsPanelUI();
+                    });
+                    
+                    const endDrag = () => { drag = false; if(clip) delete clip._backupAnim; };
+                    el.addEventListener('pointerup', endDrag);
+                    el.addEventListener('pointercancel', endDrag);
+                };
+                attachDrag(maxEl, true);
+                attachDrag(minEl, false);
+                updateUI();
+            }
+
+            bindProjectRoller('roller-bpm', () => state.bpm, (v) => state.bpm = v, () => 1, () => 999);
+            bindProjectRoller('roller-fps', () => state.fps, (v) => state.fps = v, () => 1, () => 240);
+
+            document.querySelectorAll('.curve-container').forEach(cont => {
+                const prop = cont.dataset.prop;
+                cont.querySelectorAll('.unified-scroller').forEach(el => bindUnifiedScroller(el, prop));
+                bindBoundsRollers(cont, prop);
+                
+                const row = cont.closest('.action-row');
+                if (row) {
+                    row.addEventListener('click', e => {
+                        const clip = state.clips.find(c => c.id === state.selectedClipId);
+                        if (!clip) return;
+
+                        if (e.target.closest('.ct-link')) {
+                            curveStates[prop].linked = !curveStates[prop].linked;
+                            if(curveStates[prop].linked) syncLinkedChannels(clip, prop, curveStates[prop].activeAxis);
+                            vibe(5); updatePropsPanelUI(); updateScene(state.playheadBeat);
+                        }
+                        else if (e.target.classList.contains('ct-chan')) {
+                            curveStates[prop].activeAxis = e.target.dataset.axis;
+                            curveStates[prop].selPoint = null;
+                            vibe(5); updatePropsPanelUI();
+                        }
+                        else if (e.target.classList.contains('ct-flipx')) {
+                            if (curveStates[prop].linked) {
+                                ['X','Y','Z'].forEach(a => {
+                                    clip.anim[prop+a].forEach(k => k.t = 1.0 - k.t);
+                                    clip.anim[prop+a].sort((a,b)=>a.t-b.t);
+                                });
+                            } else {
+                                clip.anim[prop+curveStates[prop].activeAxis].forEach(k => k.t = 1.0 - k.t);
+                                clip.anim[prop+curveStates[prop].activeAxis].sort((a,b)=>a.t-b.t);
+                            }
+                            vibe(10); updateScene(state.playheadBeat); updatePropsPanelUI();
+                        }
+                        else if (e.target.classList.contains('ct-flipy')) {
+                            if (curveStates[prop].linked) {
+                                ['X','Y','Z'].forEach(a => { clip.anim[prop+a].forEach(k => k.v = -k.v); });
+                            } else {
+                                clip.anim[prop+curveStates[prop].activeAxis].forEach(k => k.v = -k.v);
+                            }
+                            vibe(10); updateScene(state.playheadBeat); updatePropsPanelUI();
+                        }
+                    });
+                }
+            });
+
+            document.getElementById('format-toggle').addEventListener('click', () => { 
+                vibe(10);
+                state.format = state.format === 0 ? 1 : 0; 
+                document.getElementById('format-toggle').innerText = state.format === 0 ? 'FMT: FRM' : 'FMT: SEC';
+                document.getElementById('roller-bpm').updateSelf();
+                document.getElementById('roller-fps').updateSelf();
+                forceRedrawTimeline();
+                updatePropsPanelUI();
+                updateScene(state.playheadBeat); 
+            });
+
+            // Playback controls
+            const pClamp = (b) => Math.max(0, b);
+            document.getElementById('pb-prev-beat').onclick = () => { vibe(5); state.playheadBeat = pClamp(Math.floor(state.playheadBeat - 1)); updateScene(state.playheadBeat); };
+            document.getElementById('pb-prev-qtr').onclick = () => { vibe(5); state.playheadBeat = pClamp(state.playheadBeat - 0.25); updateScene(state.playheadBeat); };
+            document.getElementById('pb-next-qtr').onclick = () => { vibe(5); state.playheadBeat = pClamp(state.playheadBeat + 0.25); checkTimelineExpansion(); updateScene(state.playheadBeat); };
+            document.getElementById('pb-next-beat').onclick = () => { vibe(5); state.playheadBeat = pClamp(Math.ceil(state.playheadBeat + 1)); checkTimelineExpansion(); updateScene(state.playheadBeat); };
+            
+            let lastTime = 0;
+            document.getElementById('pb-play').onclick = () => {
+                vibe(10);
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                state.isPlaying = !state.isPlaying;
+                document.getElementById('pb-play').innerText = state.isPlaying ? '⏸' : '▶';
+                const miniBtn = document.getElementById('mini-play-btn');
+                if (miniBtn) miniBtn.innerText = state.isPlaying ? '⏸' : '▶';
+                if (state.isPlaying) lastTime = performance.now();
+            };
+
+            document.getElementById('mini-play-btn').onclick = () => document.getElementById('pb-play').click();
+
+            const scrollContainer = document.getElementById('timeline-scroll');
+            const ruler = document.getElementById('timeline-ruler');
+            let isScrubbing = false;
+
+            const updatePlayheadFromEvent = (e) => {
+                const rect = document.getElementById('timeline-tracks-container').getBoundingClientRect();
+                const clickX = Math.max(0, e.clientX - rect.left);
+                state.playheadBeat = Math.max(0, clickX / state.beatWidth);
+                checkTimelineExpansion();
+                updateScene(state.playheadBeat);
+            };
+            ruler.addEventListener('pointerdown', e => { isScrubbing = true; updatePlayheadFromEvent(e); ruler.setPointerCapture(e.pointerId); });
+            ruler.addEventListener('pointermove', e => { if (isScrubbing) updatePlayheadFromEvent(e); });
+            ruler.addEventListener('pointerup', e => { isScrubbing = false; ruler.releasePointerCapture(e.pointerId); });
+
+            const playheadEl = document.getElementById('playhead');
+            playheadEl.addEventListener('pointerdown', e => { 
+                isScrubbing = true; 
+                updatePlayheadFromEvent(e); 
+                playheadEl.setPointerCapture(e.pointerId); 
+                e.stopPropagation(); 
+            });
+            playheadEl.addEventListener('pointermove', e => { 
+                if (isScrubbing) updatePlayheadFromEvent(e); 
+            });
+            playheadEl.addEventListener('pointerup', e => { 
+                isScrubbing = false; 
+                try { playheadEl.releasePointerCapture(e.pointerId); } catch(err){} 
+            });
+
+            let isPanning = false, panStartX = 0, panStartY = 0, startScrollX = 0, startScrollY = 0, didPan = false;
+            
+            scrollContainer.addEventListener('pointerdown', (e) => {
+                if (e.target.id === 'timeline-tracks-container' || e.target.id === 'timeline-bg-grid' || e.target.classList.contains('layer') || e.target.id === 'timeline-end-shade') {
+                    isPanning = true; didPan = false;
+                    panStartX = e.clientX; panStartY = e.clientY;
+                    startScrollX = scrollContainer.scrollLeft; startScrollY = scrollContainer.scrollTop;
+                    if (e.pointerType === 'mouse') {
+                        scrollContainer.style.cursor = 'grabbing';
+                        scrollContainer.setPointerCapture(e.pointerId);
+                    }
+                }
+            });
+
+            scrollContainer.addEventListener('pointermove', (e) => {
+                if (isPanning) {
+                    if (Math.hypot(e.clientX - panStartX, e.clientY - panStartY) > 5) didPan = true;
+                    if (e.pointerType === 'mouse' && !initialPinchDist) {
+                        scrollContainer.scrollLeft = startScrollX - (e.clientX - panStartX);
+                        scrollContainer.scrollTop = startScrollY - (e.clientY - panStartY);
+                    }
+                }
+            });
+
+            scrollContainer.addEventListener('pointerup', (e) => {
+                if (isPanning) {
+                    isPanning = false;
+                    if (e.pointerType === 'mouse') {
+                        scrollContainer.style.cursor = '';
+                        try { scrollContainer.releasePointerCapture(e.pointerId); } catch(err){}
+                    }
+                    if (!didPan) selectClip(null);
+                }
+            });
+            
+            scrollContainer.addEventListener('pointercancel', (e) => {
+                if (isPanning) {
+                    isPanning = false;
+                    if (e.pointerType === 'mouse') {
+                        scrollContainer.style.cursor = '';
+                        try { scrollContainer.releasePointerCapture(e.pointerId); } catch(err){}
+                    }
+                }
+            });
+
+            scrollContainer.addEventListener('wheel', e => {
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    const durationBeats = Math.max(4, getProjectDurationBeats());
+                    const minBeatWidth = scrollContainer.clientWidth / durationBeats;
+                    const rect = scrollContainer.getBoundingClientRect();
+                    const beatAtMouse = (e.clientX - rect.left + scrollContainer.scrollLeft) / state.beatWidth;
+
+                    state.beatWidth = Math.max(minBeatWidth, Math.min(500, state.beatWidth * (e.deltaY > 0 ? 0.9 : 1.1)));
+                    forceRedrawTimeline();
+
+                    scrollContainer.scrollLeft = (beatAtMouse * state.beatWidth) - (e.clientX - rect.left);
+                    updateScene(state.playheadBeat);
+                }
+            }, { passive: false });
+
+            let initialPinchDist = null, initialBeatWidth = 60, initialPinchCenter = 0;
+            scrollContainer.addEventListener('touchstart', e => {
+                if (e.touches.length === 2) {
+                    initialPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                    initialBeatWidth = state.beatWidth;
+                    const rect = scrollContainer.getBoundingClientRect();
+                    initialPinchCenter = (((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left + scrollContainer.scrollLeft) / state.beatWidth;
+                }
+            }, { passive: false });
+            
+            scrollContainer.addEventListener('touchmove', e => {
+                if (e.touches.length === 2 && initialPinchDist) {
+                    const durationBeats = Math.max(4, getProjectDurationBeats());
+                    const minBeatWidth = scrollContainer.clientWidth / durationBeats;
+
+                    state.beatWidth = Math.max(minBeatWidth, Math.min(500, initialBeatWidth * (Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY) / initialPinchDist)));
+                    forceRedrawTimeline();
+
+                    const rect = scrollContainer.getBoundingClientRect();
+                    scrollContainer.scrollLeft = (initialPinchCenter * state.beatWidth) - (((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left);
+                    updateScene(state.playheadBeat); e.preventDefault();
+                }
+            }, { passive: false });
+            scrollContainer.addEventListener('touchend', e => { if (e.touches.length < 2) initialPinchDist = null; });
+
+            function checkCollision(clipId, layer, startBeat, duration) {
+                return state.clips.some(c => (c.id !== clipId && c.layer === layer && startBeat < c.startBeat + c.duration && startBeat + duration > c.startBeat));
+            }
+
+            function updateBeatPreview(clip) {
+                const prev = document.getElementById(`preview-${clip.id}`);
+                if (!prev) return;
+                prev.innerHTML = '';
+                let stepsToRender = Math.floor(clip.duration * 4); // 4 steps per beat
+                let lanes = Object.keys(clip.seq);
+                for(let i=0; i<stepsToRender; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'beat-dot';
+                    let localIdx = i % 16;
+                    if (clip.seq[lanes[0]] && clip.seq[lanes[0]][localIdx]) dot.classList.add('kick');
+                    else if (clip.seq[lanes[1]] && clip.seq[lanes[1]][localIdx]) dot.classList.add('snare');
+                    else if (clip.seq[lanes[2]] && clip.seq[lanes[2]][localIdx]) dot.classList.add('hat');
+                    prev.appendChild(dot);
+                }
+            }
+
+            function addClip(layerIndex, startBeat, durationBeats, colorStr, type, name) {
+                const id = 'clip_' + Math.random().toString(36).substring(2, 11);
+                let mesh = null;
+                
+                if (type === 'text') {
+                    mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: parseInt(colorStr, 16) || 0xffffff }));
+                    mesh.position.set(0, 0, 0); 
+                    scene.add(mesh);
+                    create3DTextGeometry(name, 0, (geo) => {
+                        if(mesh.geometry) mesh.geometry.dispose();
+                        mesh.geometry = geo;
+                    });
+                } else if (type === 'cube' || type === 'sphere') {
+                    const geo = type === 'cube' ? new THREE.BoxGeometry(2, 2, 2) : new THREE.SphereGeometry(1.2, 32, 32);
+                    mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: parseInt(colorStr, 16) || 0xffffff, transparent: true }));
+                    mesh.position.set(0, 0, 0); 
+                    scene.add(mesh);
+                }
+
+                const clipData = {
+                    id, layer: layerIndex, mesh, type, originalColor: colorStr,
+                    startBeat, duration: durationBeats, name, fontIndex: 0,
+                    anim: {
+                        locX: [{t:0, v:0, tilt:1, smooth:0}, {t:1, v:0, tilt:1, smooth:0}], 
+                        locY: [{t:0, v:0, tilt:1, smooth:0}, {t:1, v:0, tilt:1, smooth:0}], 
+                        locZ: [{t:0, v:0, tilt:1, smooth:0}, {t:1, v:0, tilt:1, smooth:0}],
+                        rotX: [{t:0, v:0, tilt:1, smooth:0}, {t:1, v:0, tilt:1, smooth:0}], 
+                        rotY: [{t:0, v:0, tilt:1, smooth:0}, {t:1, v:0, tilt:1, smooth:0}], 
+                        rotZ: [{t:0, v:0, tilt:1, smooth:0}, {t:1, v:0, tilt:1, smooth:0}],
+                        sclX: [{t:0, v:1, tilt:1, smooth:0}, {t:1, v:1, tilt:1, smooth:0}], 
+                        sclY: [{t:0, v:1, tilt:1, smooth:0}, {t:1, v:1, tilt:1, smooth:0}], 
+                        sclZ: [{t:0, v:1, tilt:1, smooth:0}, {t:1, v:1, tilt:1, smooth:0}],
+                        volX: [{t:0, v:1, tilt:1, smooth:0}, {t:1, v:1, tilt:1, smooth:0}]
+                    },
+                    seq: (type === 'beat' || type === 'piano' || type === 'guitar') ? {
+                        [type === 'beat' ? 'kick' : type+'-low']: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+                        [type === 'beat' ? 'snare' : type+'-mid']:[0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0],
+                        [type === 'beat' ? 'hat' : type+'-high']: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1]
+                    } : null
+                };
+                state.clips.push(clipData);
+
+                const layersContainer = document.getElementById('timeline-layers-container');
+                let layerDiv = layersContainer.querySelector(`.layer[data-layer="${layerIndex}"]`);
+
+                const item = document.createElement('div');
+                item.className = 'timeline-item'; item.id = id;
+                if (clipData.seq) { 
+                    item.style.backgroundColor = type === 'beat' ? '#2c1144' : (type === 'piano' ? '#112244' : '#442211'); 
+                    item.style.borderColor = type === 'beat' ? '#83f' : (type === 'piano' ? '#3af' : '#fa3'); 
+                    item.innerHTML = `
+                        <div class="handle-edge handle-edge-left" data-handle="edge-left"></div>
+                        <div class="beat-pattern-preview" style="justify-content: space-evenly; flex-wrap: nowrap; overflow: hidden; gap: 1px;" id="preview-${id}"></div>
+                        <div class="handle-edge handle-edge-right" data-handle="edge-right"></div>
+                    `;
+                } else {
+                    item.innerHTML = `
+                        <div class="handle-edge handle-edge-left" data-handle="edge-left"></div>
+                        <div class="item-mid">${name}</div>
+                        <div class="handle-edge handle-edge-right" data-handle="edge-right"></div>
+                    `;
+                }
+                
+                layerDiv.appendChild(item);
+                if (clipData.seq) updateBeatPreview(clipData);
+                
+                updateClipDOM(item, clipData);
+                initClipInteraction(item, clipData);
+                updateScene(state.playheadBeat);
+                return id;
+            }
+
+            function selectClip(id) {
+                document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('selected'));
+                if (id) {
+                    vibe(10);
+                    document.getElementById(id).classList.add('selected');
+                    const clip = state.clips.find(c => c.id === id);
+                    if (clip && clip.mesh && document.querySelector('.tool-btn.active')) {
+                        transformControl.attach(clip.mesh); transformControl.enabled = true;
+                    } else {
+                        transformControl.detach();
+                    }
+                } else {
+                    transformControl.detach();
+                }
+                state.selectedClipId = id;
+                curveStates.loc.selPoint = null; curveStates.rot.selPoint = null; curveStates.scl.selPoint = null;
+                updatePropsPanelUI();
+            }
+
+            function updateClipDOM(item, data) {
+                if (!item) return;
+                item.style.left = `${data.startBeat * state.beatWidth}px`;
+                item.style.width = `${data.duration * state.beatWidth}px`;
+            }
+
+            function duplicateClip(sourceClip) {
+                vibe(15);
+                let newStart = sourceClip.startBeat + sourceClip.duration;
+                let layer = sourceClip.layer;
+                
+                // Shift forward if space is occupied
+                while(checkCollision('temp', layer, newStart, sourceClip.duration)) {
+                    newStart += 0.25; 
+                }
+
+                const newId = addClip(layer, newStart, sourceClip.duration, sourceClip.originalColor, sourceClip.type, sourceClip.name);
+                const newClip = state.clips.find(c => c.id === newId);
+                
+                // Deep copy animations and sequences
+                newClip.anim = JSON.parse(JSON.stringify(sourceClip.anim));
+                if (sourceClip.seq) newClip.seq = JSON.parse(JSON.stringify(sourceClip.seq));
+                newClip.fontIndex = sourceClip.fontIndex;
+                
+                // Copy materials / color
+                if (newClip.mesh && sourceClip.mesh) {
+                    newClip.mesh.material.color.copy(sourceClip.mesh.material.color);
+                    document.getElementById(newId).style.borderColor = '#' + newClip.mesh.material.color.getHexString();
+                    
+                    if (newClip.type === 'text') {
+                        create3DTextGeometry(newClip.name, newClip.fontIndex, (geo) => {
+                            if(newClip.mesh.geometry) newClip.mesh.geometry.dispose();
+                            newClip.mesh.geometry = geo;
+                        });
+                    }
+                }
+                
+                if (newClip.seq) updateBeatPreview(newClip);
+
+                selectClip(newId);
+                updateScene(state.playheadBeat);
+            }
+
+            function initClipInteraction(item, data) {
+                let activeAction = null, startX, initDur, initStartBeat, dragOffsetBeat = 0;
+                let lastTap = 0;
+                item.addEventListener('pointerdown', (e) => {
+                    const now = performance.now();
+                    if (now - lastTap < 300) {
+                        duplicateClip(data);
+                        lastTap = 0;
+                        return;
+                    }
+                    lastTap = now;
+
+                    e.stopPropagation(); selectClip(data.id);
+                    item.setPointerCapture(e.pointerId);
+                    
+                    const tracksRect = document.getElementById('timeline-tracks-container').getBoundingClientRect();
+                    const pointerBeat = (e.clientX - tracksRect.left) / state.beatWidth;
+                    dragOffsetBeat = pointerBeat - data.startBeat;
+                    
+                    startX = e.clientX; initDur = data.duration; initStartBeat = data.startBeat;
+                    activeAction = e.target.dataset.handle || 'move';
+                });
+                item.addEventListener('pointermove', (e) => {
+                    if (!activeAction) return;
+                    const tracksRect = document.getElementById('timeline-tracks-container').getBoundingClientRect();
+                    const pointerBeat = (e.clientX - tracksRect.left) / state.beatWidth;
+                    const beatsDelta = (e.clientX - startX) / state.beatWidth;
+
+                    if (activeAction === 'move') {
+                        let proposedStart = Math.max(0, snap(pointerBeat - dragOffsetBeat));
+                        let proposedLayer = data.layer, minDist = Infinity;
+                        const layersWrapper = document.getElementById('timeline-layers-container');
+                        layersWrapper.querySelectorAll('.layer').forEach(l => {
+                            const rect = l.getBoundingClientRect(); const dist = Math.abs(e.clientY - (rect.top + rect.bottom)/2);
+                            if (dist < minDist) { minDist = dist; proposedLayer = parseInt(l.dataset.layer); }
+                        });
+                        if (!checkCollision(data.id, proposedLayer, proposedStart, data.duration)) {
+                            if (data.startBeat !== proposedStart || data.layer !== proposedLayer) vibe(5);
+                            data.startBeat = proposedStart;
+                            if (proposedLayer !== data.layer) { data.layer = proposedLayer; layersWrapper.querySelector(`.layer[data-layer="${proposedLayer}"]`).appendChild(item); }
+                        }
+                    } else if (activeAction === 'edge-right') {
+                        let proposedDur = Math.max(0.5, snap(initDur + beatsDelta));
+                        if (!checkCollision(data.id, data.layer, data.startBeat, proposedDur)) {
+                            if (data.duration !== proposedDur) vibe(5);
+                            data.duration = proposedDur;
+                        }
+                    } else if (activeAction === 'edge-left') {
+                        let proposedStart = snap(initStartBeat + beatsDelta); let proposedDur = initDur - (proposedStart - initStartBeat);
+                        if (proposedStart >= 0 && proposedDur >= 0.5 && !checkCollision(data.id, data.layer, proposedStart, proposedDur)) { 
+                            if (data.startBeat !== proposedStart) vibe(5);
+                            data.startBeat = proposedStart; data.duration = proposedDur; 
+                        }
+                    }
+                    updateClipDOM(item, data); 
+                    checkTimelineExpansion(); 
+                    updateScene(state.playheadBeat);
+                });
+                item.addEventListener('pointerup', () => activeAction = null);
+            }
+
+            document.querySelectorAll('.asset-item').forEach(btn => {
+                let isDragging = false, ghost = null, startX, startY;
+                const move = (ev) => {
+                    if (!isDragging && (Math.abs(ev.clientX - startX) > 5 || Math.abs(ev.clientY - startY) > 5)) {
+                        isDragging = true; vibe(10);
+                        
+                        ghost = btn.cloneNode(true);
+                        ghost.style.cssText = `position:fixed; pointer-events:none; z-index:9999; opacity:0.8; width:${btn.offsetWidth}px; height:${btn.offsetHeight}px; background:${btn.style.backgroundColor || '#222'}; display:flex; align-items:center; justify-content:center; border-radius:8px; flex-direction:column; gap:6px;`;
+                        document.body.appendChild(ghost);
+                        document.getElementById('panels-container').classList.remove('open');
+                    }
+                    if (isDragging) { ev.preventDefault(); ghost.style.left = ev.clientX - ghost.offsetWidth / 2 + 'px'; ghost.style.top = ev.clientY - ghost.offsetHeight / 2 + 'px'; }
+                };
+                const up = (ev) => {
+                    window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+                    if (isDragging && ghost) {
+                        const scrollRect = document.getElementById('timeline-scroll').getBoundingClientRect();
+                        const tracksRect = document.getElementById('timeline-tracks-container').getBoundingClientRect();
+
+                        if (ev.clientX >= scrollRect.left && ev.clientX <= scrollRect.right && ev.clientY >= scrollRect.top && ev.clientY <= scrollRect.bottom) {
+                            let dropBeat = Math.max(0, snap((ev.clientX - tracksRect.left + scrollContainer.scrollLeft) / state.beatWidth));
+                            
+                            let layer = 1;
+                            const layersWrapper = document.getElementById('timeline-layers-container');
+                            layersWrapper.querySelectorAll('.layer').forEach(l => {
+                                const lRect = l.getBoundingClientRect();
+                                if (ev.clientY >= lRect.top && ev.clientY <= lRect.bottom) layer = parseInt(l.dataset.layer);
+                            });
+                            
+                            let isSeq = btn.dataset.type === 'beat' || btn.dataset.type === 'piano' || btn.dataset.type === 'guitar';
+                            let dropDur = isSeq ? 4 : 2;
+                            if (!checkCollision('new', layer, dropBeat, dropDur)) {
+                                const newId = addClip(layer, dropBeat, dropDur, btn.dataset.color, btn.dataset.type, btn.innerText);
+                                selectClip(newId);
+                                checkTimelineExpansion();
+                            }
+                        }
+                        document.body.removeChild(ghost);
+                    }
+                };
+                btn.addEventListener('pointerdown', (e) => {
+                    startX = e.clientX; startY = e.clientY; isDragging = false;
+                    window.addEventListener('pointermove', move, { passive: false });
+                    window.addEventListener('pointerup', up);
+                });
+            });
+
+            // --- 3. Properties & Curves ---
+
+            function renderCurve(canvasId, propName, clip) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                
+                const w = canvas.width = canvas.parentElement.clientWidth;
+                const h = canvas.height = canvas.parentElement.clientHeight;
+                const ctx = canvas.getContext('2d');
+                
+                const bounds = getCurveBounds(propName);
+                const range = bounds.max - bounds.min;
+                const getY = v => h - ((v - bounds.min) / range) * h;
+                const getX = t => t * w;
+
+                ctx.clearRect(0, 0, w, h);
+                
+                // Dynamic Y grid lines
+                let yStep = 0.2;
+                if (range > 30) yStep = 2.0;
+                else if (range > 15) yStep = 1.0;
+                else if (range > 6) yStep = 0.5;
+                else if (range >= 3.9) yStep = 0.4;
+                else yStep = 0.2;
+
+                const labelsCont = canvas.closest('.curve-main-layout').querySelector('.curve-y-labels');
+                let labelsHTML = '';
+
+                ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+                ctx.beginPath();
+                let startYGrid = Math.ceil(bounds.min / yStep) * yStep;
+                for(let i = 0; ; i++) {
+                    let y = startYGrid + i * yStep;
+                    if (y > bounds.max + 0.0001) break;
+                    if (y < bounds.min - 0.0001) continue;
+
+                    let py = Math.floor(getY(y)) + 0.5;
+                    if (Math.abs(y) > 0.001) { // non-zero lines
+                        ctx.moveTo(0, py); ctx.lineTo(w, py);
+                    }
+                    
+                    const pct = ((bounds.max - y) / range) * 100;
+                    const pxFromTop = (pct / 100) * h;
+                    if (pxFromTop > 8 && pxFromTop < h - 8) {
+                        let lblText = Math.abs(y) < 0.001 ? "0" : y.toFixed(1);
+                        labelsHTML += `<div class="y-label" style="top: ${pct}%">${lblText}</div>`;
+                    }
+                }
+                ctx.stroke();
+                
+                if (labelsCont) labelsCont.innerHTML = labelsHTML;
+
+                // Draw solid center 0 line
+                if (bounds.min <= 0 && bounds.max >= 0) {
+                    const y0 = Math.floor(getY(0)) + 0.5;
+                    ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y0); ctx.lineTo(w, y0);
+                    ctx.stroke();
+                }
+
+                // X grid wires: quarter beats vs full beats
+                if (clip && clip.duration) {
+                    const totalBeats = clip.duration;
+                    const totalQuarterBeats = Math.floor(totalBeats * 4);
+                    
+                    // Quarter beats
+                    ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    for(let i = 1; i <= totalQuarterBeats; i++) {
+                        if (i % 4 !== 0) {
+                            let xT = i / (totalBeats * 4);
+                            if (xT >= 1) continue;
+                            let px = Math.floor(getX(xT)) + 0.5;
+                            ctx.moveTo(px, 0); ctx.lineTo(px, h);
+                        }
+                    }
+                    ctx.stroke();
+
+                    // Full beats
+                    ctx.strokeStyle = '#444'; ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    for(let i = 1; i <= totalQuarterBeats; i++) {
+                        if (i % 4 === 0) {
+                            let xT = i / (totalBeats * 4);
+                            if (xT >= 1) continue;
+                            let px = Math.floor(getX(xT)) + 0.5;
+                            ctx.moveTo(px, 0); ctx.lineTo(px, h);
+                        }
+                    }
+                    ctx.stroke();
+                }
+
+                const colors = { X: '#ff4757', Y: '#2ed573', Z: '#1e90ff' };
+                const axis = curveStates[propName].activeAxis;
+                if (!axis) return;
+
+                const arr = clip.anim[propName+axis];
+                
+                ctx.strokeStyle = colors[axis]; ctx.lineWidth = 2;
+                ctx.beginPath();
+                for(let i=0; i<=50; i++) {
+                    const t = i/50;
+                    const v = getV(arr, t);
+                    if (i===0) ctx.moveTo(getX(t), getY(v));
+                    else ctx.lineTo(getX(t), getY(v));
+                }
+                ctx.stroke();
+                
+                arr.forEach((k, kIdx) => {
+                    ctx.fillStyle = (curveStates[propName].selPoint === k) ? '#fff' : colors[axis];
+                    ctx.beginPath();
+                    ctx.arc(getX(k.t), getY(k.v), (curveStates[propName].selPoint === k) ? 10.5 : 7.5, 0, Math.PI*2);
+                    ctx.fill();
+                    
+                    if (curveStates[propName].selPoint === k) {
+                        ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+                        
+                        let m = getTangent(arr, kIdx);
+                        let px_dx = w;
+                        let px_dy = -m * (h / range);
+                        
+                        let len = Math.hypot(px_dx, px_dy);
+                        if (len > 0) {
+                            let scaleMult = 1 + Math.max(0, k.smooth || 0);
+                            let lineLen = Math.max(27, w * 0.08) * scaleMult; 
+                            let hx = (px_dx / len) * lineLen;
+                            let hy = (px_dy / len) * lineLen;
+                            
+                            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+                            ctx.beginPath();
+                            ctx.moveTo(getX(k.t) - hx, getY(k.v) - hy);
+                            ctx.lineTo(getX(k.t) + hx, getY(k.v) + hy);
+                            ctx.stroke();
+                            
+                            ctx.fillStyle = '#fff';
+                            ctx.beginPath(); ctx.arc(getX(k.t) - hx, getY(k.v) - hy, 3.5, 0, Math.PI*2); ctx.fill();
+                            ctx.beginPath(); ctx.arc(getX(k.t) + hx, getY(k.v) + hy, 3.5, 0, Math.PI*2); ctx.fill();
+                        }
+                    }
+                });
+
+                // Draw Playhead Line in Curve
+                let currentT = (state.playheadBeat - clip.startBeat) / clip.duration;
+                if (currentT >= 0 && currentT <= 1) {
+                    const px = Math.floor(getX(currentT)) + 0.5;
+                    ctx.strokeStyle = '#2F69FF';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(px, 0);
+                    ctx.lineTo(px, h);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#2F69FF';
+                    ctx.beginPath(); ctx.arc(px, 3, 3, 0, Math.PI*2); ctx.fill();
+                }
+            }
+
+            let curveDrag = null;
+            document.querySelectorAll('.curve-container').forEach(cont => {
+                const prop = cont.dataset.prop;
+                const canvas = cont.querySelector('.curve-editor');
+                
+                canvas.addEventListener('pointerdown', e => {
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if (!clip) return;
+                    
+                    const rect = canvas.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+                    const clickT = mouseX / rect.width;
+
+                    const bounds = getCurveBounds(prop);
+                    const range = bounds.max - bounds.min;
+                    const axis = curveStates[prop].activeAxis;
+                    const arr = clip.anim[prop+axis];
+
+                    // 1. Check Handle Hit First
+                    let handleHit = null;
+                    if (curveStates[prop].selPoint) {
+                        let selK = curveStates[prop].selPoint;
+                        let idx = arr.indexOf(selK);
+                        if (idx !== -1) {
+                            let m = getTangent(arr, idx);
+                            let px_dx = rect.width;
+                            let px_dy = -m * (rect.height / range);
+                            let len = Math.hypot(px_dx, px_dy);
+                            if (len > 0) {
+                                let scaleMult = 1 + Math.max(0, selK.smooth || 0);
+                                let lineLen = Math.max(27, rect.width * 0.08) * scaleMult;
+                                let hx = (px_dx / len) * lineLen;
+                                let hy = (px_dy / len) * lineLen;
+                                const px = selK.t * rect.width;
+                                const pv = rect.height - ((selK.v - bounds.min) / range) * rect.height;
+                                
+                                // Check right handle
+                                if (Math.hypot((px + hx) - mouseX, (pv + hy) - mouseY) < 25) {
+                                    handleHit = { type: 'right', kRef: selK };
+                                }
+                                // Check left handle
+                                else if (Math.hypot((px - hx) - mouseX, (pv - hy) - mouseY) < 25) {
+                                    handleHit = { type: 'left', kRef: selK };
+                                }
+                            }
+                        }
+                    }
+
+                    if (handleHit) {
+                        // Pre-calculate base_m for tilt adjustment
+                        let selK = handleHit.kRef;
+                        let idx = arr.indexOf(selK);
+                        let k0 = idx > 0 ? arr[idx-1] : selK;
+                        let k2 = idx < arr.length-1 ? arr[idx+1] : selK;
+                        let base_m = 0;
+                        if (k0 === selK && k2 === selK) base_m = 0;
+                        else if (k0 === selK) base_m = (k2.v - selK.v) / (k2.t - selK.t);
+                        else if (k2 === selK) base_m = (selK.v - k0.v) / (selK.t - k0.t);
+                        else base_m = (k2.v - k0.v) / (k2.t - k0.t);
+
+                        curveDrag = { mode: 'handle', clip, prop, axis, canvas, rect, ptRef: selK, bounds, range, handleType: handleHit.type, base_m, lastTilt: selK.tilt || 1 };
+                        canvas.setPointerCapture(e.pointerId);
+                        vibe(5);
+                        return;
+                    }
+                    
+                    // 2. Check Point Hit
+                    let closest = null, minDist = 30;
+
+                    clip.anim[prop+axis].forEach((k, kIdx) => {
+                        const px = k.t * rect.width;
+                        const pv = rect.height - ((k.v - bounds.min) / range) * rect.height;
+                        const dist = Math.hypot(px - mouseX, pv - mouseY);
+                        if (dist < minDist) { minDist = dist; closest = { kIdx, kRef: k }; }
+                    });
+
+                    if (closest) {
+                        curveStates[prop].selPoint = closest.kRef;
+                        const isStart = (closest.kIdx === 0);
+                        const isEnd = (closest.kIdx === clip.anim[prop+axis].length - 1);
+                        curveDrag = { mode: 'point', clip, prop, axis, canvas, rect, ptRef: closest.kRef, bounds, range, isStart, isEnd };
+                        canvas.setPointerCapture(e.pointerId);
+                        vibe(5);
+                    } else {
+                        let yStep = 0.2;
+                        if (range > 30) yStep = 2.0;
+                        else if (range > 15) yStep = 1.0;
+                        else if (range > 6) yStep = 0.5;
+                        else if (range >= 3.9) yStep = 0.4;
+                        else yStep = 0.2;
+                        const snapY = yStep / 2;
+                        const snapT = 1 / (clip.duration * 8);
+
+                        let rawT = Math.max(0, Math.min(1, clickT));
+                        let newT = Math.round(rawT / snapT) * snapT;
+                        newT = Math.max(0, Math.min(1, Math.round(newT * 10000) / 10000));
+                        
+                        let rawV = getV(arr, newT);
+                        let val = Math.round(rawV / snapY) * snapY;
+                        val = Math.max(bounds.min, Math.min(bounds.max, Math.round(val * 1000) / 1000));
+                        
+                        const newPt = {t: newT, v: val, tilt: 1, smooth: 0};
+                        arr.push(newPt);
+                        arr.sort((a,b) => a.t - b.t);
+                        curveStates[prop].selPoint = newPt;
+
+                        if (curveStates[prop].linked) syncLinkedChannels(clip, prop, axis);
+                        curveDrag = { mode: 'point', clip, prop, axis, canvas, rect, ptRef: newPt, bounds, range, isStart: false, isEnd: false };
+                        canvas.setPointerCapture(e.pointerId);
+                        vibe(10);
+                    }
+                    
+                    state.playheadBeat = clip.startBeat + curveDrag.ptRef.t * clip.duration;
+                    const playheadX = state.playheadBeat * state.beatWidth;
+                    const scrollContainer = document.getElementById('timeline-scroll');
+                    if (playheadX < scrollContainer.scrollLeft || playheadX > scrollContainer.scrollLeft + scrollContainer.clientWidth) {
+                        scrollContainer.scrollLeft = Math.max(0, playheadX - scrollContainer.clientWidth * 0.5);
+                    }
+                    
+                    checkTimelineExpansion();
+                    updateScene(state.playheadBeat);
+                    updatePropsPanelUI();
+                });
+                
+                canvas.addEventListener('pointermove', e => {
+                    if (!curveDrag) return;
+                    const { mode, clip, prop, axis, rect, ptRef, bounds, range } = curveDrag;
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+
+                    if (mode === 'handle') {
+                        const px = ptRef.t * rect.width;
+                        const pv = rect.height - ((ptRef.v - bounds.min) / range) * rect.height;
+                        
+                        let m_dx = mouseX - px;
+                        let m_dy = mouseY - pv;
+                        if (curveDrag.handleType === 'left') { m_dx = -m_dx; m_dy = -m_dy; }
+
+                        let dist = Math.hypot(m_dx, m_dy);
+                        let base_len = Math.max(27, rect.width * 0.08);
+                        
+                        let oldSmooth = ptRef.smooth || 0;
+                        let newSmooth = (dist / base_len) - 1;
+                        ptRef.smooth = Math.max(-2, Math.min(2, newSmooth));
+
+                        if (Math.round(ptRef.smooth * 10) !== Math.round(oldSmooth * 10)) vibe(1);
+
+                        if (Math.abs(m_dx) > 0.1) {
+                            let m_target = - (m_dy / m_dx) * (rect.width / (rect.height / range));
+                            let base_m = curveDrag.base_m;
+                            
+                            if (Math.abs(base_m) > 0.001) {
+                                let newTilt = m_target / (base_m * (1 + Math.max(0, ptRef.smooth)));
+                                ptRef.tilt = Math.max(-5, Math.min(5, newTilt));
+                                if (Math.round(ptRef.tilt * 10) !== Math.round(curveDrag.lastTilt * 10)) { 
+                                    vibe(1); 
+                                    curveDrag.lastTilt = ptRef.tilt; 
+                                }
+                            }
+                        }
+                    } else if (mode === 'point') {
+                        const { isStart, isEnd } = curveDrag;
+                        
+                        if (mouseX < -30 || mouseX > rect.width + 30 || mouseY < -30 || mouseY > rect.height + 30) {
+                            const arr = clip.anim[prop+axis];
+                            if (!isStart && !isEnd && arr.length > 2) { 
+                                const idx = arr.indexOf(ptRef);
+                                if (idx > 0 && idx < arr.length - 1) {
+                                    arr.splice(idx, 1);
+                                    curveStates[prop].selPoint = null;
+                                    curveDrag = null;
+                                    if(curveStates[prop].linked) syncLinkedChannels(clip, prop, axis);
+                                    updateScene(state.playheadBeat);
+                                    updatePropsPanelUI();
+                                    return;
+                                }
+                            }
+                        }
+                        
+                        let yStep = 0.2;
+                        if (range > 30) yStep = 2.0;
+                        else if (range > 15) yStep = 1.0;
+                        else if (range > 6) yStep = 0.5;
+                        else if (range >= 3.9) yStep = 0.4;
+                        else yStep = 0.2;
+                        const snapY = yStep / 2;
+                        const snapT = 1 / (clip.duration * 8);
+
+                        const clampedX = Math.max(0, Math.min(rect.width, mouseX));
+                        let rawT = clampedX / rect.width;
+                        
+                        let oldT = ptRef.t;
+                        if (isStart) ptRef.t = 0;
+                        else if (isEnd) ptRef.t = 1;
+                        else {
+                            let snappedT = Math.round(rawT / snapT) * snapT;
+                            ptRef.t = Math.max(0, Math.min(1, Math.round(snappedT * 10000) / 10000));
+                        }
+
+                        if (Math.round(ptRef.t * 1000) !== Math.round(oldT * 1000)) vibe(1);
+
+                        let oldV = ptRef.v;
+                        let rawV = bounds.min + (1 - mouseY / rect.height) * range;
+                        let snappedV = Math.round(rawV / snapY) * snapY;
+                        ptRef.v = Math.max(bounds.min, Math.min(bounds.max, Math.round(snappedV * 1000) / 1000)); 
+                        
+                        if (Math.round(ptRef.v * 1000) !== Math.round(oldV * 1000)) vibe(1);
+                        
+                        clip.anim[prop+axis].sort((a,b) => a.t - b.t);
+                    }
+                    
+                    state.playheadBeat = clip.startBeat + ptRef.t * clip.duration;
+                    const playheadX = state.playheadBeat * state.beatWidth;
+                    const scrollContainer = document.getElementById('timeline-scroll');
+                    if (playheadX < scrollContainer.scrollLeft || playheadX > scrollContainer.scrollLeft + scrollContainer.clientWidth) {
+                        scrollContainer.scrollLeft = Math.max(0, playheadX - scrollContainer.clientWidth * 0.5);
+                    }
+
+                    if(curveStates[prop].linked) syncLinkedChannels(clip, prop, axis);
+                    
+                    checkTimelineExpansion();
+                    updateScene(state.playheadBeat);
+                    updatePropsPanelUI();
+                });
+                canvas.addEventListener('pointerup', () => { curveDrag = null; });
+            });
+
+            function renderBeatSequencer(clip) {
+                const grid = document.getElementById('seq-grid');
+                grid.innerHTML = '';
+                Object.keys(clip.seq).forEach(drum => {
+                    const row = document.createElement('div'); row.className = 'action-row';
+                    let label = drum.replace('piano-', '').replace('guitar-', '').toUpperCase();
+                    row.innerHTML = `<div class="safe-scroll-label" style="color:var(--accent);">${label}</div><div class="action-controls cols-1"><div class="seq-steps"></div></div>`;
+                    const stepsCont = row.querySelector('.seq-steps');
+                    for(let i=0; i<16; i++) {
+                        const step = document.createElement('div');
+                        step.className = 'seq-step' + (clip.seq[drum][i] ? ' active' : '');
+                        step.onclick = () => {
+                            vibe(5); clip.seq[drum][i] = !clip.seq[drum][i];
+                            step.classList.toggle('active');
+                            if (clip.seq[drum][i]) playDrum(drum, audioCtx.currentTime);
+                            updateBeatPreview(clip);
+                        };
+                        stepsCont.appendChild(step);
+                    }
+                    grid.appendChild(row);
+                });
+            }
+
+            function updatePropsPanelUI() {
+                if(document.getElementById('roller-bpm').updateSelf) {
+                    document.getElementById('roller-bpm').updateSelf();
+                    document.getElementById('roller-fps').updateSelf();
+                }
+
+                const clip = state.clips.find(c => c.id === state.selectedClipId);
+                
+                if (!clip) {
+                    document.getElementById('props-project').style.display = 'flex';
+                    document.getElementById('props-clip').style.display = 'none';
+                    document.getElementById('props-beat').style.display = 'none';
+                    document.getElementById('btn-delete-clip').style.display = 'none';
+                    document.getElementById('panel-header-title').innerText = 'PROJECT SETTINGS';
+                    return;
+                }
+                
+                document.getElementById('props-project').style.display = 'none';
+                document.getElementById('btn-delete-clip').style.display = 'flex';
+
+                if (clip.seq) {
+                    document.getElementById('props-clip').style.display = 'none';
+                    document.getElementById('props-beat').style.display = 'flex';
+                    let title = 'AUDIO LOOP';
+                    if (clip.type === 'piano') title = 'PIANO LOOP';
+                    if (clip.type === 'guitar') title = 'GUITAR LOOP';
+                    document.getElementById('panel-header-title').innerText = title;
+                    renderBeatSequencer(clip);
+                    renderCurve(`curve-vol`, 'vol', clip);
+                    const cont = document.querySelector(`.curve-container[data-prop="vol"]`);
+                    if(cont) cont.querySelectorAll('.unified-scroller').forEach(us => us.updateSelf && us.updateSelf());
+                } else {
+                    document.getElementById('props-beat').style.display = 'none';
+                    document.getElementById('props-clip').style.display = 'flex';
+                    document.getElementById('panel-header-title').innerText = 'CLIP TRANSFORM';
+
+                    ['loc', 'rot', 'scl'].forEach(prop => {
+                        const cont = document.querySelector(`.curve-container[data-prop="${prop}"]`);
+                        if(!cont) return;
+                        
+                        renderCurve(`curve-${prop}`, prop, clip);
+
+                        const row = cont.closest('.action-row');
+                        const linkBtn = row.querySelector('.ct-link');
+                        if (linkBtn) linkBtn.classList.toggle('active', curveStates[prop].linked);
+
+                        ['X','Y','Z'].forEach(axis => {
+                            const btn = row.querySelector(`.ct-chan[data-axis="${axis}"]`);
+                            if(btn) {
+                                if (curveStates[prop].linked && linkBtn) {
+                                    btn.style.opacity = axis === 'X' ? '1' : '0.2';
+                                    btn.style.pointerEvents = axis === 'X' ? 'auto' : 'none';
+                                } else {
+                                    btn.style.opacity = curveStates[prop].activeAxis === axis ? '1' : '0.4';
+                                    btn.style.pointerEvents = 'auto';
+                                }
+                                btn.classList.toggle('active', curveStates[prop].activeAxis === axis);
+                            }
+                        });
+
+                        cont.querySelectorAll('.unified-scroller').forEach(us => us.updateSelf && us.updateSelf());
+                    });
+
+                    if (clip.type === 'text') {
+                        document.getElementById('prop-text-row').style.display = 'flex'; 
+                        
+                        const textInput = document.getElementById('prop-text-input');
+                        if (document.activeElement !== textInput) textInput.value = clip.name;
+
+                        document.getElementById('prop-font-row').style.display = 'flex'; 
+                        document.querySelector('.mat-group').style.display = 'flex';
+                        document.getElementById('f-mid').innerText = stateFonts[clip.fontIndex];
+                    } else {
+                        document.getElementById('prop-text-row').style.display = 'none'; 
+                        document.getElementById('prop-font-row').style.display = 'none'; 
+                        document.querySelector('.mat-group').style.display = 'flex';
+                    }
+                    if (clip.mesh && clip.mesh.material.color) {
+                        const hex = '#' + clip.mesh.material.color.getHexString();
+                        document.getElementById('mat-color-input').value = hex;
+                        document.getElementById('mat-color-hex').textContent = hex;
+                    }
+                    document.getElementById('mini-clip-name').innerText = clip.name;
+                }
+            }
+
+            document.getElementById('prop-text-input').addEventListener('input', (e) => {
+                const clip = state.clips.find(c => c.id === state.selectedClipId);
+                if (clip && clip.type === 'text') {
+                    clip.name = e.target.value;
+                    document.getElementById('mini-clip-name').innerText = clip.name;
+                    const timelineItem = document.getElementById(clip.id);
+                    if(timelineItem) timelineItem.querySelector('.item-mid').innerText = clip.name;
+                    
+                    create3DTextGeometry(clip.name, clip.fontIndex, (geo) => {
+                        if(clip.mesh.geometry) clip.mesh.geometry.dispose();
+                        clip.mesh.geometry = geo;
+                    });
+                    window.forceSceneUpdate();
+                }
+            });
+
+            document.getElementById('mat-color-input').addEventListener('input', (e) => {
+                const clip = state.clips.find(c => c.id === state.selectedClipId);
+                if (clip && clip.mesh && clip.mesh.material) {
+                    clip.mesh.material.color.set(e.target.value);
+                    document.getElementById('mat-color-hex').textContent = e.target.value;
+                    document.getElementById(clip.id).style.borderColor = e.target.value;
+                    updateScene(state.playheadBeat);
+                }
+            });
+
+            const fontRoller = document.getElementById('prop-font');
+            let fDrag = false, fStartY, fExact = 0, fVel = 0, fLastTime = 0, fAnimFrame = null;
+            
+            function updateFontScroller() {
+                const clip = state.clips.find(c => c.id === state.selectedClipId);
+                if (!clip || clip.type !== 'text') return;
+                
+                // Limit bounds with some rubber banding
+                if (fExact < 0) fExact *= 0.8;
+                if (fExact > stateFonts.length - 1) fExact = (stateFonts.length - 1) + (fExact - (stateFonts.length - 1)) * 0.8;
+
+                const newIdx = Math.max(0, Math.min(stateFonts.length - 1, Math.round(fExact)));
+                
+                document.getElementById('f-top').innerText = stateFonts[newIdx - 1] || '';
+                document.getElementById('f-mid').innerText = stateFonts[newIdx] || '';
+                document.getElementById('f-bot').innerText = stateFonts[newIdx + 1] || '';
+
+                if (clip.fontIndex !== newIdx) { 
+                    vibe(5); 
+                    clip.fontIndex = newIdx; 
+                    create3DTextGeometry(clip.name, newIdx, (geo) => {
+                        if(clip.mesh.geometry) clip.mesh.geometry.dispose();
+                        clip.mesh.geometry = geo;
+                    });
+                    updateScene(state.playheadBeat); 
+                }
+            }
+
+            function momentumLoop() {
+                if (fDrag) return;
+                fExact -= fVel;
+                fVel *= 0.85; // friction
+                
+                let target = fExact;
+                if (fExact < 0) target = 0; 
+                else if (fExact > stateFonts.length - 1) target = stateFonts.length - 1; 
+                else if (Math.abs(fVel) < 0.05) target = Math.round(fExact); // snapping
+
+                if (target !== fExact) fExact += (target - fExact) * 0.15; // spring to target
+                
+                updateFontScroller();
+
+                if (Math.abs(fVel) > 0.01 || Math.abs(Math.round(fExact) - fExact) > 0.01 || fExact < 0 || fExact > stateFonts.length - 1) {
+                    fAnimFrame = requestAnimationFrame(momentumLoop);
+                } else {
+                    fExact = Math.round(fExact);
+                    updateFontScroller();
+                }
+            }
+
+            fontRoller.addEventListener('pointerdown', e => {
+                const clip = state.clips.find(c => c.id === state.selectedClipId); if (!clip || clip.type !== 'text') return;
+                fDrag = true; fStartY = e.clientY; fExact = clip.fontIndex; fVel = 0; fLastTime = performance.now();
+                cancelAnimationFrame(fAnimFrame);
+                fontRoller.setPointerCapture(e.pointerId);
+            });
+
+            fontRoller.addEventListener('pointermove', e => {
+                if (!fDrag) return;
+                const now = performance.now();
+                const dt = Math.max(1, now - fLastTime);
+                const dy = e.clientY - fStartY;
+                fVel = (dy / dt) * 1.5; 
+                fExact -= dy * 0.05; 
+                fStartY = e.clientY;
+                fLastTime = now;
+                updateFontScroller();
+            });
+
+            fontRoller.addEventListener('pointerup', () => { fDrag = false; momentumLoop(); });
+            fontRoller.addEventListener('pointercancel', () => { fDrag = false; momentumLoop(); });
+
+            document.getElementById('btn-delete-clip').addEventListener('click', () => {
+                if (state.selectedClipId) {
+                    const idx = state.clips.findIndex(c => c.id === state.selectedClipId);
+                    if (idx > -1) {
+                        vibe(20);
+                        if (state.clips[idx].mesh) { 
+                            transformControl.detach(); 
+                            if (state.clips[idx].mesh.geometry) state.clips[idx].mesh.geometry.dispose();
+                            if (state.clips[idx].mesh.material) {
+                                if (Array.isArray(state.clips[idx].mesh.material)) state.clips[idx].mesh.material.forEach(m => m.dispose());
+                                else state.clips[idx].mesh.material.dispose();
+                            }
+                            scene.remove(state.clips[idx].mesh); 
+                        }
+                        document.getElementById(state.clips[idx].id).remove();
+                        state.clips.splice(idx, 1); selectClip(null); updateScene(state.playheadBeat);
+                    }
+                }
+            });
+
+            document.getElementById('btn-close-panel').addEventListener('click', () => {
+                vibe(10);
+                document.querySelector('.tab-btn[data-target="timeline"]').click();
+            });
+
+            document.getElementById('btn-close-assets').addEventListener('click', () => {
+                vibe(10);
+                document.querySelector('.tab-btn[data-target="timeline"]').click();
+            });
+
+            // Tabs
+            document.querySelectorAll('.tab-btn').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    vibe(5);
+                    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active')); tab.classList.add('active');
+                    const target = tab.dataset.target;
+                    const panelsCont = document.getElementById('panels-container');
+                    if (target === 'timeline') { panelsCont.classList.remove('open'); } 
+                    else {
+                        panelsCont.classList.add('open');
+                        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                        document.getElementById(`panel-${target}`).classList.add('active');
+                        if (target === 'props') updatePropsPanelUI();
+                    }
+                });
+            });
+
+            const frameRoller = document.getElementById('roller-frame');
+            let frDrag = false, frStartX = 0, frStartBeat = 0;
+            frameRoller.addEventListener('pointerdown', (e) => {
+                frDrag = true; frStartX = e.clientX; frStartBeat = state.playheadBeat;
+                frameRoller.setPointerCapture(e.pointerId);
+            });
+            frameRoller.addEventListener('pointermove', (e) => {
+                if(!frDrag) return;
+                const deltaFrames = (frStartX - e.clientX) / 10;
+                let newBeat = frStartBeat + (deltaFrames / state.fps) * (state.bpm / 60);
+                state.playheadBeat = Math.max(0, newBeat);
+                checkTimelineExpansion();
+                updateScene(state.playheadBeat);
+            });
+            frameRoller.addEventListener('pointerup', () => frDrag = false);
+
+            // --- 4. Render ---
+            let lastRenderedBeat = -1;
+            let forceRender = true;
+            window.forceSceneUpdate = () => forceRender = true;
+
+            function updateScene(currentBeat) {
+                if (!forceRender && currentBeat === lastRenderedBeat && !state.isPlaying && !transformControl.dragging && !gzDrag.active) return;
+                forceRender = false;
+                lastRenderedBeat = currentBeat;
+
+                document.getElementById('playhead').style.transform = `translateX(${currentBeat * state.beatWidth}px)`;
+                
+                const maxBeat = getProjectDurationBeats();
+                const endShade = document.getElementById('timeline-end-shade');
+                if (endShade) endShade.style.left = `${maxBeat * state.beatWidth}px`;
+
+                const sec = (currentBeat * 60) / state.bpm;
+                const currentFrame = Math.round(sec * state.fps) + 1;
+                
+                const spansCont = document.getElementById('fr-dynamic-spans');
+                let spansHTML = '';
+                for (let i = 1; i <= 30; i++) {
+                    if (state.format === 0) spansHTML += `<span class="fr-val">${currentFrame + i}</span>`;
+                    else spansHTML += `<span class="fr-val">${(sec + (1 / state.fps) * i).toFixed(1)}s</span>`;
+                }
+                spansCont.innerHTML = spansHTML;
+
+                if (state.format === 0) document.getElementById('fr-active').innerText = currentFrame;
+                else document.getElementById('fr-active').innerText = sec.toFixed(2) + 's';
+
+                state.clips.forEach(clip => {
+                    const isVisible = (currentBeat >= clip.startBeat && currentBeat <= clip.startBeat + clip.duration);
+                    if (clip.mesh) {
+                        clip.mesh.visible = isVisible;
+                        if (isVisible && (!transformControl.dragging || transformControl.object !== clip.mesh)) {
+                            let t = (currentBeat - clip.startBeat) / clip.duration;
+                            t = Math.max(0, Math.min(1, t));
+                            
+                            clip.mesh.position.set(getV(clip.anim.locX, t), getV(clip.anim.locY, t), getV(clip.anim.locZ, t));
+                            clip.mesh.rotation.set(THREE.MathUtils.degToRad(getV(clip.anim.rotX, t)), THREE.MathUtils.degToRad(getV(clip.anim.rotY, t)), THREE.MathUtils.degToRad(getV(clip.anim.rotZ, t)));
+                            clip.mesh.scale.set(getV(clip.anim.sclX, t), getV(clip.anim.sclY, t), getV(clip.anim.sclZ, t));
+                        }
+                    }
+                });
+
+                if (state.selectedClipId) {
+                    const clip = state.clips.find(c => c.id === state.selectedClipId);
+                    if (clip && clip.type !== 'beat') {
+                        let pct = 0;
+                        if (currentBeat >= clip.startBeat && currentBeat <= clip.startBeat + clip.duration) pct = ((currentBeat - clip.startBeat) / clip.duration) * 100;
+                        else if (currentBeat > clip.startBeat + clip.duration) pct = 100;
+                        document.getElementById('mini-playhead-big').style.left = pct + '%';
+                        document.getElementById('mini-frame-val').innerText = 'FRM ' + (Math.round(sec * state.fps) + 1);
+
+                        // Live sync curve editors playhead
+                        if (document.getElementById('panels-container').classList.contains('open') && document.getElementById('panel-props').classList.contains('active')) {
+                            ['loc', 'rot', 'scl'].forEach(prop => renderCurve(`curve-${prop}`, prop, clip));
+                            if (clip.seq) renderCurve(`curve-vol`, 'vol', clip);
+                        }
+                    }
+                }
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+                orbitControls.update();
+
+                if (camIndex !== 0 && isCamLocked) {
+                    const activeCam = cameras[camIndex];
+                    activeCam.pos.copy(camera.position);
+                    activeCam.target.copy(orbitControls.target);
+                    
+                    activeCam.obj.position.copy(camera.position);
+                    activeCam.obj.quaternion.copy(camera.quaternion);
+                    activeCam.obj.aspect = camera.aspect;
+                    activeCam.obj.updateProjectionMatrix();
+                    activeCam.helper.update();
+                }
+
+                cameras.forEach((c, i) => {
+                    if (c.helper) {
+                        c.helper.visible = (i !== camIndex) && overlaysVisible;
+                    }
+                });
+
+                if (state.isPlaying) {
+                    const now = performance.now();
+                    state.playheadBeat += ((now - lastTime) / 1000) * (state.bpm / 60);
+                    lastTime = now;
+                    
+                    const maxBeat = getProjectDurationBeats();
+                    if (state.playheadBeat >= maxBeat) { 
+                        state.playheadBeat = 0; 
+                        scrollContainer.scrollLeft = 0; 
+                        lastAudioStep = -1;
+                    }
+                    
+                    checkTimelineExpansion();
+
+                    const playheadX = state.playheadBeat * state.beatWidth;
+                    if (playheadX > scrollContainer.scrollLeft + scrollContainer.clientWidth * 0.5 && playheadX < scrollContainer.scrollWidth) { 
+                        scrollContainer.scrollLeft = playheadX - scrollContainer.clientWidth * 0.5; 
+                    }
+
+                    // Audio Sequencer Trigger (per clip synchronization)
+                    state.clips.forEach(clip => {
+                        if (clip.seq) {
+                            if (state.playheadBeat >= clip.startBeat && state.playheadBeat < clip.startBeat + clip.duration) {
+                                let clipInternalBeat = state.playheadBeat - clip.startBeat;
+                                let currentClipStep = Math.floor(clipInternalBeat * 4);
+                                if (clip._lastStep !== currentClipStep) {
+                                    clip._lastStep = currentClipStep;
+                                    const localStep = currentClipStep % 16;
+                                    const time = audioCtx.currentTime;
+                                    
+                                    let vol = 1;
+                                    if (clip.anim && clip.anim.volX) {
+                                        let t = clipInternalBeat / clip.duration;
+                                        vol = getV(clip.anim.volX, t);
+                                    }
+                                    
+                                    const lanes = Object.keys(clip.seq);
+                                    if (clip.seq[lanes[0]] && clip.seq[lanes[0]][localStep]) playDrum(lanes[0], time, vol);
+                                    if (clip.seq[lanes[1]] && clip.seq[lanes[1]][localStep]) playDrum(lanes[1], time, vol);
+                                    if (clip.seq[lanes[2]] && clip.seq[lanes[2]][localStep]) playDrum(lanes[2], time, vol);
+                                }
+                            } else {
+                                clip._lastStep = -1;
+                            }
+                        }
+                    });
+                }
+
+                updateScene(state.playheadBeat);
+                
+                if (!gzDrag.active && (Math.abs(gzVelX) > 0.05 || Math.abs(gzVelY) > 0.05)) {
+                    orbitDelta(gzVelX, gzVelY);
+                    gzVelX *= 0.85; gzVelY *= 0.85;
+                }
+
+                if (_camAnim.active) {
+                    _camAnim.t += 1 / 60 / _camAnim.dur;
+                    const k = Math.min(_camAnim.t, 1);
+                    const easeK = 1 - Math.pow(1 - k, 3);
+                    
+                    isProgrammaticCamChange = true;
+                    camera.position.lerpVectors(_camAnim.fromPos, _camAnim.toPos, easeK);
+                    camera.lookAt(orbitControls.target);
+                    orbitControls.update();
+                    isProgrammaticCamChange = false;
+                    
+                    if (k >= 1) _camAnim.active = false;
+                }
+
+                if (gzCube) {
+                    const e = camera.matrixWorldInverse.elements;
+                    gzCube.style.transform = `translate(50%, -50%) matrix3d(${e[0]}, ${e[1]}, ${e[2]}, 0, ${e[4]}, ${e[5]}, ${e[6]}, 0, ${e[8]}, ${e[9]}, ${e[10]}, 0, 0, 0, 0, 1)`;
+                }
+
+                renderer.render(scene, camera);
+            }
+
+            const layersContainer = document.getElementById('timeline-layers-container');
+            for (let i = 1; i <= 6; i++) {
+                const layer = document.createElement('div'); layer.className = 'layer'; layer.dataset.layer = i;
+                layersContainer.appendChild(layer);
+            }
+
+            // Force initial layout updates
+            setTimeout(() => {
+                adaptTimelineWidth();
+                updatePropsPanelUI();
+            }, 50);
+            
+            animate();
+
+            window.addEventListener('keydown', (e) => {
+                if (e.key === ' ') { e.preventDefault(); document.getElementById('pb-play').click(); }
+                if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedClipId) document.getElementById('btn-delete-clip').click();
+            });
+
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./sw.js').then(registration => {
+                        console.log('ServiceWorker registration successful');
+                    }).catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
